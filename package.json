@@ -1,0 +1,14 @@
+{
+  "name": "moon-proximity",
+  "version": "1.0.0",
+  "description": "",
+  "scripts": {
+    "dev": "node build dev",
+    "build": "node build"
+  },
+  "devDependencies": {
+    "@types/d3": "^7.4.3",
+    "d3": "^7.9.0",
+    "esbuild": "^0.25.4"
+  }
+}

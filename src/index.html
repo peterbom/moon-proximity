@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <link href="./common/styles/common.css" rel="stylesheet" type="text/css" />
+  <link href="./site.css" rel="stylesheet" type="text/css" />
+</head>
+
+<body>
+  <canvas id="combined-canvas"></canvas>
+  <div class="content">
+    <h1>When and where on Earth am I closest to the Moon?</h1>
+    <p>It sounds like a straightforward question, but happens to be deceptively complicated to answer. Why?</p>
+    <ul>
+      <li>The distance of the Moon at its perigee (the cloest point in its orbit) varies over time.</li>
+      <li>The Earth spins, so you need to work out which <i>part</i> of the Earth is closest to the Moon.</li>
+      <li>
+        The Earth is not perfectly spherical; it's an ellipsoid whose radius is greater at the equator than the poles.
+      </li>
+      <li>The Earth is not perfectly smooth; it has hills and mountains.</li>
+    </ul>
+    <p>
+      For any given place on Earth, you can use the excellent
+      <a href="https://ssd.jpl.nasa.gov/horizons/app.html">Horizons</a>
+      tool from Nasa's Jet Propulsion Laboratory to find the exact distance of the Moon at any time, latitude, longitude
+      and altitude.
+    </p>
+    <p>
+      But to answer our question here, we need to go the other way. Assuming we can predict roughly when the Moon will
+      be closest to the Earth, what position do we need to be at? And at exactly what time?
+    </p>
+    <p>
+      To get started, we need to know the times when the Moon is closest to the Earth. We'll temporarily shelve any
+      questions about where on the surface of the Earth we'll need to be. Here's a chart of the Moon's distance from
+      Earth over time (you can zoom in to see shorter time periods):
+    </p>
+    <div class="canvas-relative-container">
+      <div id="distance-time-view" class="graphic-rect"></div>
+    </div>
+    <p>
+      Apparently it fluctuates quite wildly, but some patterns are evident. The large swings every month reflect the
+      elliptical orbit of the Moon around the Earth. But you can also see that the size of the peaks and troughs varies
+      somewhat regularly over time. What's going on with that?
+    </p>
+    <p>
+      For our purposes here, we care mainly about the troughs (upside-down peaks, not animal feeders). These represent
+      the points where the Moon is closest to the Earth (each 'perigee' of the lunar orbit). Let's ignore the rest of
+      the orbit and focus only on the perigees. Here they are:
+    </p>
+    <div class="canvas-relative-container">
+      <div id="perigee-time-view" class="graphic-rect"></div>
+    </div>
+    <p>There are a few extra things shown here:</p>
+    <ul>
+      <li>Each circle shows the distance of the Moon at its perigee.</li>
+      <li>The vertical white lines represent full moons.</li>
+      <li>
+        The dashed line does <i>not</i> represent the distance of the Moon, but is instead a best-fit of its distance at
+        each perigee. Its purpose is to show the regular wave-like pattern of the perigees getting closer and further
+        away over time.
+      </li>
+      <li>Solid white circles show the perigees which are closest in time to Super Moons.</li>
+      <li>Black circles with white outline show the perigees which are closest in time to Super New Moons.</li>
+    </ul>
+    <p>
+      There is a cycle which repeats a bit less than once per year, where the perigees get closest at alternating Super
+      Moons and Super New Moons. These are the points where the Sun, Earth and Moon are all roughly aligned.
+    </p>
+    <p>
+      The reason it's not exactly once per year is 'apsidal precession', in which the orientation of the Moon's
+      eliptical orbit rotates once every 8.85 years. Because it's rotating in the same direction as the Moon rotates
+      around the Earth, it takes a little over a year for the line of apsides to get back to the same orientation
+      relative to the Sun. This is all explained much better by Bartosz Ciechanowski's fantastic
+      <a href="https://ciechanow.ski/moon/">guide to the Moon</a>.
+    </p>
+    <p>
+      Now we know that the Moon is closest when it's aligned with the Earth and the Sun, we can re-order our chart of
+      perigees. This time, we can plot the
+      <i>angle</i> of the Moon relative to its full moon position, as observed from Earth. Full moons would be close to
+      0° and new moons would be around 180°. The curve here confirms the moon is consistently closest when the perigee
+      coincides with both full moons and new moons. Because the points are all clustered together in this view you'll
+      probably need to zoom in to distinguish them.
+    </p>
+    <p></p>
+    <div class="canvas-relative-container">
+      <div id="perigee-angle-view" class="graphic-rect"></div>
+    </div>
+    <div class="canvas-relative-container">
+      <div id="earth-view" class="graphic-square"></div>
+    </div>
+    <div class="canvas-relative-container">
+      <div id="proximity-map-view" class="graphic-rect"></div>
+    </div>
+  </div>
+
+  <script type="module" src="index.js"></script>
+</body>

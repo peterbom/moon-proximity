@@ -1,0 +1,13 @@
+import { Vector3 } from "./common/numeric-types";
+
+export const earthEquatorialRadius = 6378.137;
+export const earthPolarRadius = 6356.752314245;
+export const earthToMoonMass = 81.30056845;
+
+export const highlightColor: Vector3 = [0.616, 0, 1]; // #9D00FF
+
+// This determines the area of the Earth to focus on when examining the distance
+// of the moon at its perigee.
+// All of the Earth's surface (at sea level) which is within this distance will
+// be highlighted.
+export const highlightClosestKmCount = 10;
