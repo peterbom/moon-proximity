@@ -9,9 +9,6 @@ export type State = {
   perigees: DelayedProperty<Perigee[]>;
   selectedPerigee: NotifiableProperty<Perigee | null>;
   proximityShapeData: NotifiableProperty<ProximityShapeData | null>;
-  externals: {
-    d3: any;
-  };
 };
 
 export type DatePosition = {

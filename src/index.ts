@@ -1,4 +1,4 @@
-import { getCanvasByIdOrError, getElementByIdOrError } from "./common/html-utils";
+import { getCanvasByIdOrError, getElementByIdOrError, getScrollYLimit } from "./common/html-utils";
 import { Ephemeris } from "./ephemeris";
 import type { DateDistance, DatePosition, Perigee, State } from "./state-types";
 import { getWebGLContext, MultiViewContext } from "./webgl/context";
@@ -15,9 +15,10 @@ onbeforeunload = function (e) {
 };
 
 document.addEventListener("DOMContentLoaded", function () {
-  const scrollpos = localStorage.getItem("mp-scrollpos");
-  if (scrollpos) {
-    window.scrollTo(0, parseInt(scrollpos));
+  const storedScrollpos = localStorage.getItem("mp-scrollpos");
+  if (storedScrollpos) {
+    const scrollPos = Math.min(parseInt(storedScrollpos), getScrollYLimit());
+    window.scrollTo(0, scrollPos);
   }
 
   const combinedCanvas = getCanvasByIdOrError("combined-canvas");
@@ -67,7 +68,4 @@ const state: State = {
   perigees: new DelayedProperty<Perigee[]>(),
   selectedPerigee: new NotifiableProperty(null),
   proximityShapeData: new NotifiableProperty(null),
-  externals: {
-    d3: null,
-  },
 };

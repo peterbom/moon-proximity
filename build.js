@@ -27,7 +27,8 @@ if (isDev) {
 
 async function serve() {
   const ctx = await context(sharedConfig);
-  let { hosts, port } = await ctx.serve({
+  await ctx.watch();
+  const { hosts, port } = await ctx.serve({
     servedir: "dist",
   });
 

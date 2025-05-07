@@ -11,3 +11,6 @@ export const highlightColor: Vector3 = [0.616, 0, 1]; // #9D00FF
 // All of the Earth's surface (at sea level) which is within this distance will
 // be highlighted.
 export const highlightClosestKmCount = 10;
+
+export const displayStartDate = new Date("2025-01-01T00:00:00Z");
+export const displayEndDate = new Date("2035-01-01T00:00:00Z");
