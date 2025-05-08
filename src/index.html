@@ -2,12 +2,10 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <link href="./common/styles/common.css" rel="stylesheet" type="text/css" />
-  <link href="./site.css" rel="stylesheet" type="text/css" />
+  <link href="./index.css" rel="stylesheet" type="text/css" />
 </head>
 
 <body>
-  <canvas id="combined-canvas"></canvas>
   <div class="content">
     <h1>When and where on Earth am I closest to the Moon?</h1>
     <p>It sounds like a straightforward question, but happens to be deceptively complicated to answer. Why?</p>
@@ -34,9 +32,7 @@
       questions about where on the surface of the Earth we'll need to be. Here's a chart of the Moon's distance from
       Earth over time (you can zoom in to see shorter time periods):
     </p>
-    <div class="canvas-relative-container">
-      <div id="distance-time-view" class="graphic-rect"></div>
-    </div>
+    <div id="distance-time-view"></div>
     <p>
       Apparently it fluctuates quite wildly, but some patterns are evident. The large swings every month reflect the
       elliptical orbit of the Moon around the Earth. But you can also see that the size of the peaks and troughs varies
@@ -47,9 +43,7 @@
       the points where the Moon is closest to the Earth (each 'perigee' of the lunar orbit). Let's ignore the rest of
       the orbit and focus only on the perigees. Here they are:
     </p>
-    <div class="canvas-relative-container">
-      <div id="perigee-time-view" class="graphic-rect"></div>
-    </div>
+    <div id="perigee-time-view"></div>
     <p>There are a few extra things shown here:</p>
     <ul>
       <li>Each circle shows the distance of the Moon at its perigee.</li>
@@ -82,15 +76,9 @@
       probably need to zoom in to distinguish them.
     </p>
     <p></p>
-    <div class="canvas-relative-container">
-      <div id="perigee-angle-view" class="graphic-rect"></div>
-    </div>
-    <div class="canvas-relative-container">
-      <div id="earth-view" class="graphic-square"></div>
-    </div>
-    <div class="canvas-relative-container">
-      <div id="proximity-map-view" class="graphic-rect"></div>
-    </div>
+    <div id="perigee-angle-view"></div>
+    <div id="earth-view"></div>
+    <div id="proximity-map-view"></div>
   </div>
 
   <script type="module" src="index.js"></script>

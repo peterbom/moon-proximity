@@ -114,9 +114,9 @@ export async function run(container: HTMLElement, state: State) {
 
   // When zooming, redraw the area and the x axis.
   function zoomed(event: D3ZoomEvent<SVGElement, undefined>) {
-    const xz = event.transform.rescaleX(xScale);
-    path.attr("d", makeLine(xz));
-    scaleXAxis(xz);
+    const xZoomed = event.transform.rescaleX(xScale);
+    path.attr("d", makeLine(xZoomed));
+    scaleXAxis(xZoomed);
   }
 }
 

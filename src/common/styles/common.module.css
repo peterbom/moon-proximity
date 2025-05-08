@@ -1,4 +1,4 @@
-#combined-canvas {
+.combinedCanvas {
   position: absolute;
   top: 0;
   left: 0;
@@ -8,18 +8,18 @@
   display: block;
 }
 
-.virtual-canvas {
+.virtualCanvas {
   display: inline-block;
   width: 100%;
   height: 30rem;
   background-color: rgba(0, 0, 0, 0);
 }
 
-.canvas-relative-container {
+.relativeContainer {
   position: relative;
 }
 
-.control-group {
+.controlGroup {
   position: absolute;
   top: 10px;
   right: 10px;
@@ -31,30 +31,30 @@
   mix-blend-mode: difference; /* allow visibility on different background colors: https://stackoverflow.com/a/58460326 */
 }
 
-.control-group > div {
+.controlGroup > div {
   pointer-events: none;
 }
-.control-group input,
-.control-group label,
-.control-group select,
-.control-group option {
+.controlGroup input,
+.controlGroup label,
+.controlGroup select,
+.controlGroup option {
   pointer-events: auto;
 }
 
-.single-control {
+.singleControl {
   float: right;
   display: flex;
   align-items: center;
   height: 1.7em;
 }
 
-.single-control-label {
+.singleControlLabel {
   font-size: medium;
   min-width: 10em;
   text-align: right;
 }
 
-.single-control-value {
+.singleControlValue {
   float: right;
   font-size: medium;
   order: 1;
@@ -62,7 +62,7 @@
   white-space: nowrap;
 }
 
-.slider-control {
+.sliderControl {
   opacity: 0.5;
   font-size: large;
   margin-left: 0.3em;
@@ -70,18 +70,17 @@
   min-width: 120px;
 }
 
-.canvas-overlay {
+.canvasOverlay {
   position: absolute;
   left: 0;
   top: 0;
   text-wrap-mode: nowrap;
   padding: 0.5rem 0.8rem;
-  background-color: white;
   user-select: none; /* prevent text selection/highlighting */
   pointer-events: none; /* make overlay transparent to mouse events */
 }
 
-.texture-container {
+.textureContainer {
   position: absolute;
   background-color: transparent;
 }

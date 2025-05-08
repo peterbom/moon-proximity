@@ -1,4 +1,4 @@
-import { getCanvasByIdOrError, getElementByIdOrError, getScrollYLimit } from "./common/html-utils";
+import { createCombinedCanvas, createDivInRelativeContainer, getScrollYLimit } from "./common/html-utils";
 import { Ephemeris } from "./ephemeris";
 import type { DateDistance, DatePosition, Perigee, State } from "./state-types";
 import { getWebGLContext, MultiViewContext } from "./webgl/context";
@@ -9,6 +9,7 @@ import { run as runPerigeeAngleView } from "./views/perigee-angle-view";
 import { run as runEarthView } from "./views/earth-view";
 import { run as runProximityMapView } from "./views/proximity-map-view";
 import { DelayedProperty, NotifiableProperty } from "./common/state-properties";
+import { graphicRect, graphicSquare } from "./styles/graphics.module.css";
 
 onbeforeunload = function (e) {
   localStorage.setItem("mp-scrollpos", window.scrollY.toString());
@@ -21,33 +22,31 @@ document.addEventListener("DOMContentLoaded", function () {
     window.scrollTo(0, scrollPos);
   }
 
-  const combinedCanvas = getCanvasByIdOrError("combined-canvas");
+  const combinedCanvas = createCombinedCanvas();
   const gl = getWebGLContext(combinedCanvas);
   const multiSceneDrawer = new MultiSceneDrawer(gl);
 
-  const elemViewLookup: {
-    [elementId: string]: (element: HTMLElement, state: State) => void;
-  } = {
-    "distance-time-view": runDistanceTimeView,
-    "perigee-time-view": runPerigeeTimeView,
-    "perigee-angle-view": runPerigeeAngleView,
+  const elemViewLookup: ElementFunctionLookup = {
+    "distance-time-view": { run: runDistanceTimeView, classList: [graphicRect] },
+    "perigee-time-view": { run: runPerigeeTimeView, classList: [graphicRect] },
+    "perigee-angle-view": { run: runPerigeeAngleView, classList: [graphicRect] },
   };
 
-  const webglViewLookup: {
-    [virtualCanvasId: string]: (context: MultiViewContext, state: State) => void;
-  } = {
-    "earth-view": runEarthView,
-    "proximity-map-view": runProximityMapView,
+  const virtualCanvasViewLookup: VirtualCanvasFunctionLookup = {
+    "earth-view": { run: runEarthView, classList: [graphicSquare] },
+    "proximity-map-view": { run: runProximityMapView, classList: [graphicRect] },
   };
 
-  Object.keys(elemViewLookup).forEach((elementId) => {
-    const elem = getElementByIdOrError(elementId);
-    elemViewLookup[elementId](elem, state);
+  Object.keys(elemViewLookup).forEach((containerId) => {
+    const { run, classList } = elemViewLookup[containerId];
+    const elem = createDivInRelativeContainer(containerId, ...classList);
+    run(elem, state);
   });
 
-  Object.keys(webglViewLookup).forEach((virtualCanvasId) => {
-    const virtualCanvas = getElementByIdOrError(virtualCanvasId);
-    webglViewLookup[virtualCanvasId]({ combinedCanvas, virtualCanvas, gl, multiSceneDrawer }, state);
+  Object.keys(virtualCanvasViewLookup).forEach((containerId) => {
+    const { run, classList } = virtualCanvasViewLookup[containerId];
+    const virtualCanvas = createDivInRelativeContainer(containerId, ...classList);
+    run({ combinedCanvas, virtualCanvas, gl, multiSceneDrawer }, state);
   });
 });
 
@@ -68,4 +67,17 @@ const state: State = {
   perigees: new DelayedProperty<Perigee[]>(),
   selectedPerigee: new NotifiableProperty(null),
   proximityShapeData: new NotifiableProperty(null),
+};
+
+type ElementFunctionLookup = {
+  [containerId: string]: {
+    run: (element: HTMLElement, state: State) => void;
+    classList: string[];
+  };
+};
+type VirtualCanvasFunctionLookup = {
+  [containerId: string]: {
+    run: (context: MultiViewContext, state: State) => void;
+    classList: string[];
+  };
 };

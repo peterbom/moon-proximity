@@ -9,6 +9,8 @@
   "devDependencies": {
     "@types/d3": "^7.4.3",
     "d3": "^7.9.0",
-    "esbuild": "^0.25.4"
+    "esbuild": "^0.25.4",
+    "typescript": "^5.8.3",
+    "typescript-plugin-css-modules": "^5.1.0"
   }
 }

@@ -3,5 +3,6 @@
   "editor.formatOnSave": true,
   "editor.defaultFormatter": "esbenp.prettier-vscode",
   "editor.formatOnSaveMode": "file",
-  "livePreview.autoRefreshPreview": "Never"
+  "livePreview.autoRefreshPreview": "Never",
+  "typescript.tsdk": "node_modules\\typescript\\lib"
 }

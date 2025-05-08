@@ -1,0 +1,16 @@
+.graphicRect {
+  display: inline-block;
+  width: 100%;
+  height: 30rem;
+}
+
+.graphicSquare {
+  display: inline-block;
+  width: 100%;
+  height: unset;
+  aspect-ratio: 1/1;
+}
+
+.canvasOverlay {
+  background-color: black;
+}
