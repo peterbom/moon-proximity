@@ -9,9 +9,14 @@ import { D3ScaleTime } from "./d3-alias-types";
 import { Ephemeris } from "../ephemeris";
 import { getBestQualitySampleRanges, QualitySample, refine } from "../common/peak-detection";
 import { getAngleFromFullMoon, getCosAngleFromFullMoon, getDistance, getEarthMoonPositions } from "../calculations";
+import { scaleVector } from "../common/vectors";
 
 const lineColor = asCssColor([...moonlightColor, 1]);
+const moonCircleColor = asCssColor([...moonlightColor, 1]);
 const pointColor = asCssColor([...highlightColor, 1]);
+
+const deselectedMoonCircleColor = asCssColor([...scaleVector(moonlightColor, 0.4), 1]);
+const deselectedPointColor = asCssColor([...scaleVector(highlightColor, 0.4), 1]);
 
 const fullMoonCosAngle = 1;
 const newMoonCosAngle = -1;
@@ -26,6 +31,9 @@ export async function run(container: HTMLElement, state: State) {
   state.perigees.setValue(perigees);
 
   const tooltipOverlay = createPerigeeOverlay(container);
+
+  let selectedPerigee = state.selectedPerigee.getValue();
+  state.selectedPerigee.subscribe(selectedPerigeeChanged);
 
   // Declare the chart dimensions and margins.
   const width = container.clientWidth;
@@ -104,12 +112,12 @@ export async function run(container: HTMLElement, state: State) {
     .data(perigees)
     .enter()
     .append("circle")
-    .attr("cx", (d) => xScale(d.date))
-    .attr("cy", (d) => yScale(d.distance))
-    .attr("r", 6)
-    .attr("stroke", "#fff")
-    .attr("stroke-width", (d) => (d.isSuperMoon || d.isSuperNewMoon ? 2 : 0))
-    .attr("fill", (d) => (d.isSuperMoon ? "#fff" : d.isSuperNewMoon ? "#000" : pointColor))
+    .attr("cx", (p) => xScale(p.date))
+    .attr("cy", (p) => yScale(p.distance))
+    .attr("r", getRadius)
+    .attr("stroke", getCircleOutlineColor)
+    .attr("stroke-width", (p) => (p.isSuperMoon || p.isSuperNewMoon ? 2 : 0))
+    .attr("fill", getCircleColor)
     .style("cursor", "pointer")
     .on("mouseover", (_e, p) => handlePerigeeMouseover(tooltipOverlay, p, xZoomed(p.date), yScale(p.distance)))
     .on("mouseout", () => handlePerigeeMouseout(tooltipOverlay))
@@ -127,7 +135,7 @@ export async function run(container: HTMLElement, state: State) {
     .attr("x2", xScale)
     .attr("y2", height - marginTop - marginBottom)
     .style("stroke-width", 1)
-    .style("stroke", "#aaa")
+    .style("stroke", lineColor)
     .style("fill", "none");
 
   // Add the x-axis.
@@ -156,9 +164,34 @@ export async function run(container: HTMLElement, state: State) {
   function zoomed(event: D3ZoomEvent<SVGElement, undefined>) {
     xZoomed = event.transform.rescaleX(xScale);
     path.attr("d", makeLine(xZoomed));
-    points.attr("cx", (d: Perigee) => xZoomed(d.date));
+    points.attr("cx", (d) => xZoomed(d.date));
     fullMoonLines.attr("x1", xZoomed).attr("x2", xZoomed);
     scaleXAxis(xZoomed);
+  }
+
+  function selectedPerigeeChanged(perigee: Perigee | null) {
+    selectedPerigee = perigee;
+    points.attr("stroke", getCircleOutlineColor).attr("fill", getCircleColor).attr("r", getRadius);
+  }
+
+  function getRadius(perigee: Perigee): number {
+    return perigee === selectedPerigee ? 9 : 6;
+  }
+
+  function getCircleOutlineColor(perigee: Perigee): string {
+    if (selectedPerigee === null || selectedPerigee === perigee) {
+      return moonCircleColor;
+    }
+
+    return deselectedMoonCircleColor;
+  }
+
+  function getCircleColor(perigee: Perigee): string {
+    if (selectedPerigee === null || selectedPerigee === perigee) {
+      return perigee.isSuperMoon ? moonCircleColor : perigee.isSuperNewMoon ? "#000" : pointColor;
+    }
+
+    return perigee.isSuperMoon ? deselectedMoonCircleColor : perigee.isSuperNewMoon ? "#000" : deselectedPointColor;
   }
 }
 
