@@ -10,7 +10,7 @@ export type CanvasScaling = {
   heightPerCssPixel: number;
 };
 
-export type GLViewportDimensions = {
+export type CanvasViewportDimensions = {
   scaling: CanvasScaling;
 
   /**
@@ -24,4 +24,28 @@ export type GLViewportDimensions = {
    * The Y offset is relative to the bottom of the canvas.
    */
   pixelRect: ScreenRect;
+};
+
+export type CanvasCssCoordinates = {
+  withinGLViewport: boolean;
+  canvasCssX: number;
+  canvasCssY: number;
+};
+
+export type CanvasPixelCoordinates = {
+  pixelX: number;
+  pixelY: number;
+};
+
+export type CanvasClipCoordinates = {
+  clipX: number;
+  clipY: number;
+  clipZ: number;
+};
+
+export type CanvasCoordinates = CanvasCssCoordinates & CanvasPixelCoordinates & CanvasClipCoordinates;
+
+export type RenderDimensions = {
+  width: number;
+  height: number;
 };

@@ -1,4 +1,5 @@
 import type { Vector3 } from "./numeric-types";
+import { crossProduct3, normalize, subtractVectors } from "./vectors";
 
 export function makeIdentity4() {
   // prettier-ignore
@@ -92,6 +93,13 @@ export function makeRotationZ(angleInRadians: number) {
   ];
 }
 
+export function makeRotationFromX(to: Vector3): number[] {
+  const normTo = normalize(to);
+  const rotationAxis = normalize(crossProduct3([1, 0, 0], normTo));
+  const angle = Math.acos(normTo[0]);
+  return makeRotationOnAxis(rotationAxis, angle);
+}
+
 export function makeRotationOnAxis(normalizedAxis: Vector3, angleInRadians: number) {
   // Using quaternion multiplication, a pure rotation around q of unit length is given by q * p * qInv
   // where p is the point to be rotated.
@@ -145,6 +153,31 @@ export function makeRotationOnAxis(normalizedAxis: Vector3, angleInRadians: numb
     2*(w*y + x*z), 2*(y*z - w*x), w2 - x2 - y2 + z2, 0,
     0, 0, 0, 1
   ];
+}
+
+export function makeLookAt(cameraPosition: Vector3, target: Vector3, up: Vector3 = [0, 1, 0]): number[] {
+  // https://webglfundamentals.org/webgl/lessons/webgl-3d-camera.html
+
+  // From the camera's perspective, the target is straight ahead along its negative z-axis.
+  // So, the positive z-axis (k-hat) points out behind the camera in a line from the target.
+  // Directionally, this is cameraPosition - target (because target + k-hat-dir = cameraPosition).
+  // To avoid scaling the camera distance, k-hat needs to be normalized.
+  const kHat = normalize(subtractVectors(cameraPosition, target));
+
+  // i-hat will be perpendicular to the plane comprising the span of 'up' and k-hat.
+  // j-hat will be perpendicular to the plane comprising the span of k-hat and i-hat.
+  const iHat = normalize(crossProduct3(up, kHat));
+  const jHat = normalize(crossProduct3(kHat, iHat));
+
+  // The resulting transformation will include the rotational components as well as the
+  // translation.
+  // prettier-ignore
+  return [
+      ...iHat, 0,
+      ...jHat, 0,
+      ...kHat, 0,
+      ...cameraPosition, 1,
+    ];
 }
 
 function multiply4v(m: number[], v: number[]) {

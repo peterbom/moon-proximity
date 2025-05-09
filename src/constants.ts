@@ -5,6 +5,7 @@ export const earthPolarRadius = 6356.752314245;
 export const earthToMoonMass = 81.30056845;
 
 export const highlightColor: Vector3 = [0.616, 0, 1]; // #9D00FF
+export const sunlightColor: Vector3 = [0.99, 0.95, 0.78]; // #fcf2c7
 export const moonlightColor: Vector3 = [0.76, 0.77, 0.8]; // #C2C5CC
 
 // This determines the area of the Earth to focus on when examining the distance
