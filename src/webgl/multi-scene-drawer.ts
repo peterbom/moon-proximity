@@ -1,4 +1,5 @@
-import type { GLViewportDimensions, ScreenRect } from "./dimension-types";
+import { getCanvasViewportDimensions } from "./canvas-interaction";
+import type { CanvasViewportDimensions, ScreenRect } from "./dimension-types";
 
 export type StillSceneDrawer = (pixelRect: ScreenRect) => void;
 export type AnimatedSceneDrawer = (pixelRect: ScreenRect, deltaSeconds: number) => void;
@@ -24,8 +25,8 @@ export class MultiSceneDrawer {
     }
   >();
   private readonly visibleElements = {
-    still: new Map<HTMLElement, GLViewportDimensions>(),
-    animated: new Map<HTMLElement, GLViewportDimensions>(),
+    still: new Map<HTMLElement, CanvasViewportDimensions>(),
+    animated: new Map<HTMLElement, CanvasViewportDimensions>(),
   };
   private readonly scrollListener: () => void;
   private animationFrameRequest: number | null = null;
@@ -97,7 +98,7 @@ export class MultiSceneDrawer {
   private refreshVisibleElements() {
     this.visibleElements.still.clear();
     this.stillDrawers.forEach((_drawer, elem) => {
-      const viewportDimensions = getGLViewportDimensions(this.combinedCanvas, elem);
+      const viewportDimensions = getCanvasViewportDimensions(this.combinedCanvas, elem);
       if (isVisible(viewportDimensions.pixelRect, this.combinedCanvas)) {
         this.visibleElements.still.set(elem, viewportDimensions);
       }
@@ -105,7 +106,7 @@ export class MultiSceneDrawer {
 
     this.visibleElements.animated.clear();
     this.animatedDrawers.forEach((_drawer, elem) => {
-      const viewportDimensions = getGLViewportDimensions(this.combinedCanvas, elem);
+      const viewportDimensions = getCanvasViewportDimensions(this.combinedCanvas, elem);
       if (isVisible(viewportDimensions.pixelRect, this.combinedCanvas)) {
         this.visibleElements.animated.set(elem, viewportDimensions);
       }
@@ -179,42 +180,4 @@ function resizeCanvasToDisplaySize(canvas: HTMLCanvasElement) {
 
   canvas.width = displayWidth;
   canvas.height = displayHeight;
-}
-
-function getGLViewportDimensions(combinedCanvas: HTMLCanvasElement, virtualCanvas: HTMLElement): GLViewportDimensions {
-  // Use getBoundingClientRect instead of clientWidth/clientHeight, as it more accurately represents
-  // what is displayed on the screen (e.g. respecting CSS transforms) and its dimensions are not
-  // required to be integers.
-  // https://developer.mozilla.org/en-US/docs/Web/API/Element/getBoundingClientRect
-  const combined = combinedCanvas.getBoundingClientRect();
-  const virtual = virtualCanvas.getBoundingClientRect();
-
-  // Get the position of the virtual canvas relative to the combined canvas in CSS pixels
-  const cssYOffsetFromBottom = combined.bottom - virtual.bottom;
-  const cssRect: ScreenRect = {
-    xOffset: virtual.left - combined.left,
-    yOffset: virtual.top - combined.top,
-    width: virtual.width,
-    height: virtual.height,
-  };
-
-  // The number of canvas pixels per CSS pixel is determined by the width/height properties
-  // of the canvas. These are assumed to have been set intentionally, considering device pixel
-  // ratio and desired pixellation. Here, we only care about the results of those choices.
-  const widthPerCssPixel = combinedCanvas.width / combined.width;
-  const heightPerCssPixel = combinedCanvas.height / combined.height;
-
-  // If a measurement is 3 CSS pixels and widthPerCssPixel is 2 (canvas pixels per CSS pixel),
-  // the pixel measurement is 3x2.
-  const pixelRect: ScreenRect = {
-    xOffset: cssRect.xOffset * widthPerCssPixel,
-    yOffset: cssYOffsetFromBottom * heightPerCssPixel,
-    width: cssRect.width * widthPerCssPixel,
-    height: cssRect.height * heightPerCssPixel,
-  };
-  return {
-    cssRect,
-    pixelRect,
-    scaling: { widthPerCssPixel, heightPerCssPixel },
-  };
 }

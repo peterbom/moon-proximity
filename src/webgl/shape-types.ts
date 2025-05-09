@@ -1,6 +1,5 @@
-import { Vector2, Vector3, Vector4 } from "../common/numeric-types";
-
-export type DrawMode = "Triangles" | "Lines";
+import type { Vector2, Vector3, Vector4 } from "../common/numeric-types";
+import type { DrawMode } from "./program-types";
 
 export type ShapeData = {
   positions: Vector3[];

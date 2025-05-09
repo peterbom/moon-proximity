@@ -1,5 +1,6 @@
 import {
   compose4,
+  makeRotationFromX,
   makeRotationOnAxis,
   makeRotationX,
   makeRotationY,
@@ -78,6 +79,10 @@ export function asAxialRotation(normalizedAxis: Vector3, angleInRadians: number)
   };
 }
 
+export function asAxialRotationFromUnitX(to: Vector3): Transform {
+  return { type: TransformType.RotationOnAxis, matrix: makeRotationFromX(to) };
+}
+
 export function asXRotation(angleInRadians: number): RotationXYZ {
   return { type: TransformType.RotationXYZ, value: [angleInRadians, 0, 0] };
 }
@@ -91,6 +96,23 @@ export function asZRotation(angleInRadians: number): RotationXYZ {
 }
 
 export type TransformSeries = Transform[];
+
+export type LocalWorldTransforms = {
+  localToWorldTransforms: TransformSeries;
+  localToWorldMatrix: number[];
+  worldToLocalTransforms: TransformSeries;
+  worldToLocalMatrix: number[];
+};
+
+export function getLocalWorldTransforms(localToWorldTransforms: TransformSeries): LocalWorldTransforms {
+  const worldToLocalTransforms = invertTransformSeries(localToWorldTransforms);
+  return {
+    localToWorldTransforms,
+    localToWorldMatrix: getTransformSeriesMatrix(localToWorldTransforms),
+    worldToLocalTransforms,
+    worldToLocalMatrix: getTransformSeriesMatrix(worldToLocalTransforms),
+  };
+}
 
 export function invertTransformSeries(series: TransformSeries): TransformSeries {
   return [...series].reverse().map(invertTransform);
@@ -118,31 +140,6 @@ export function invertTransform(transform: Transform): Transform {
   }
 
   throw new Error("Unexpected transform type");
-}
-
-export function makeLookAt(cameraPosition: Vector3, target: Vector3, up: Vector3 = [0, 1, 0]): number[] {
-  // https://webglfundamentals.org/webgl/lessons/webgl-3d-camera.html
-
-  // From the camera's perspective, the target is straight ahead along its negative z-axis.
-  // So, the positive z-axis (k-hat) points out behind the camera in a line from the target.
-  // Directionally, this is cameraPosition - target (because target + k-hat-dir = cameraPosition).
-  // To avoid scaling the camera distance, k-hat needs to be normalized.
-  const kHat = normalize(subtractVectors(cameraPosition, target));
-
-  // i-hat will be perpendicular to the plane comprising the span of 'up' and k-hat.
-  // j-hat will be perpendicular to the plane comprising the span of k-hat and i-hat.
-  const iHat = normalize(crossProduct3(up, kHat));
-  const jHat = normalize(crossProduct3(kHat, iHat));
-
-  // The resulting transformation will include the rotational components as well as the
-  // translation.
-  // prettier-ignore
-  return [
-      ...iHat, 0,
-      ...jHat, 0,
-      ...kHat, 0,
-      ...cameraPosition, 1,
-    ];
 }
 
 export function getNormalTransformSeries(objectSeries: TransformSeries): TransformSeries {
