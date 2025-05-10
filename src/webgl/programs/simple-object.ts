@@ -58,31 +58,31 @@ const fragmentShaderSrcTemplate = /*glsl*/ `#version 300 es
   }
 `;
 
-type SharedAttribValues = {
+export type CommonSimpleObjectAttribValues = {
   a_position: (Vector2 | Vector3 | Vector4)[];
 };
 
-export type ColorAttributeSimpleObjectAttribValues = SharedAttribValues & {
+export type ColorAttributeSimpleObjectAttribValues = CommonSimpleObjectAttribValues & {
   a_color: (Vector3 | Vector4)[];
 };
 
-export type TextureAttributeSimpleObjectAttribValues = SharedAttribValues & {
+export type TextureAttributeSimpleObjectAttribValues = CommonSimpleObjectAttribValues & {
   a_texcoord: Vector2[];
 };
 
-export type UniformColorSimpleObjectAttribValues = SharedAttribValues;
+export type UniformColorSimpleObjectAttribValues = CommonSimpleObjectAttribValues;
 
-type SharedUniformValues = {
+export type CommonSimpleObjectUniformValues = {
   u_matrix: number[];
 };
 
-export type ColorAttributeSimpleObjectUniformValues = SharedUniformValues;
+export type ColorAttributeSimpleObjectUniformValues = CommonSimpleObjectUniformValues;
 
-export type TextureAttributeSimpleObjectUniformValues = SharedUniformValues & {
+export type TextureAttributeSimpleObjectUniformValues = CommonSimpleObjectUniformValues & {
   u_texture: WebGLTexture;
 };
 
-export type UniformColorSimpleObjectUniformValues = SharedUniformValues & {
+export type UniformColorSimpleObjectUniformValues = CommonSimpleObjectUniformValues & {
   u_color: Vector4;
 };
 

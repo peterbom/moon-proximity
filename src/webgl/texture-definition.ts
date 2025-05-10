@@ -1,3 +1,4 @@
+import type { Vector4 } from "../common/numeric-types";
 import type { RenderDimensions, ScreenRect } from "./dimension-types";
 
 const typeValues = {
@@ -14,8 +15,6 @@ const formatValues = {
   RED_INTEGER: 36244,
   DEPTH_COMPONENT: 6402,
 } as const;
-
-type Format = Extract<keyof typeof formatValues, string>;
 
 // https://registry.khronos.org/OpenGL-Refpages/es3.0/html/glTexImage2D.xhtml
 const internalFormatValues = {
@@ -100,6 +99,7 @@ type TextureProperties = {
 
 export class TextureDefinition {
   private properties: TextureProperties;
+  private mutableTexture: WebGLTexture | null = null;
 
   constructor(internalFormat: InternalFormat) {
     this.properties = {
@@ -119,27 +119,59 @@ export class TextureDefinition {
     return this;
   }
 
-  public createTexture(gl: WebGL2RenderingContext, dimensions: RenderDimensions): WebGLTexture {
-    if (internalFormatValues[this.properties.internalFormat].type === typeValues.FLOAT) {
+  public updateFromImage(gl: WebGL2RenderingContext, texture: WebGLTexture, image: TexImageSource) {
+    const internalFormatValue = internalFormatValues[this.properties.internalFormat].value;
+    const formatValue = internalFormatValues[this.properties.internalFormat].format;
+    const type = internalFormatValues[this.properties.internalFormat].type;
+
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, internalFormatValue, formatValue, type, image);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+  }
+
+  public createMutable(gl: WebGL2RenderingContext, initialColor: Vector4): WebGLTexture {
+    const internalFormatValue = internalFormatValues[this.properties.internalFormat].value;
+    const formatValue = internalFormatValues[this.properties.internalFormat].format;
+    const type = internalFormatValues[this.properties.internalFormat].type;
+    const valuesPerPixel = internalFormatValues[this.properties.internalFormat].valuesPerPixel;
+    const initialData = initialColor.slice(0, valuesPerPixel);
+    const arrayBufferCtor = internalFormatValues[this.properties.internalFormat].arrayBufferCtor;
+    const initialBufferData = new arrayBufferCtor(initialData);
+
+    this.getExtensions(gl);
+    const texture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    this.setParameters(gl, texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, internalFormatValue, 1, 1, 0, formatValue, type, initialBufferData);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    return texture;
+  }
+
+  public createImmutable(gl: WebGL2RenderingContext, dimensions: RenderDimensions): WebGLTexture {
+    const internalFormatValue = internalFormatValues[this.properties.internalFormat].value;
+
+    this.getExtensions(gl);
+    const texture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    this.setParameters(gl, texture);
+    gl.texStorage2D(gl.TEXTURE_2D, 1, internalFormatValue, dimensions.width, dimensions.height);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    return texture;
+  }
+
+  private getExtensions(gl: WebGL2RenderingContext) {
+    const type = internalFormatValues[this.properties.internalFormat].type;
+    if (type === typeValues.FLOAT) {
       // Needed to render floats to the color buffer.
       gl.getExtension("EXT_color_buffer_float");
     }
+  }
 
-    const texture = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, texture);
+  private setParameters(gl: WebGL2RenderingContext, texture: WebGLTexture) {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, magFilterValues[this.properties.magFilter]);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, minFilterValues[this.properties.minFilter]);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); // TODO: Make configurable
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE); // TODO: Make configurable
-    gl.texStorage2D(
-      gl.TEXTURE_2D,
-      1,
-      internalFormatValues[this.properties.internalFormat].value,
-      dimensions.width,
-      dimensions.height
-    );
-    gl.bindTexture(gl.TEXTURE_2D, null);
-    return texture;
   }
 
   public createReadBuffer(rect: ScreenRect): TextureReadBufferInfo {
@@ -162,3 +194,26 @@ export type TextureReadBufferInfo = {
   type: number;
   valuesPerPixel: number;
 };
+
+export function createDownloadingTexture(
+  gl: WebGL2RenderingContext,
+  imageSrc: string,
+  internalFormat: InternalFormat,
+  initialColor: Vector4
+): WebGLTexture {
+  const textureDefinition = new TextureDefinition(internalFormat);
+  const texture = textureDefinition.createMutable(gl, initialColor);
+
+  (async function () {
+    const imageElem = await loadImage(imageSrc);
+    textureDefinition.updateFromImage(gl, texture, imageElem);
+  })();
+
+  return texture;
+}
+
+export function loadImage(imageSrc: string): Promise<HTMLImageElement> {
+  const image = new Image();
+  image.src = imageSrc;
+  return new Promise((resolve) => image.addEventListener("load", () => resolve(image)));
+}

@@ -6,12 +6,11 @@ import { InternalFormat, TextureDefinition } from "./texture-definition";
 
 export function createPickingRenderTarget(
   gl: WebGL2RenderingContext,
-  internalFormat: InternalFormat, // TODO: narrow options
-  dimensions: RenderDimensions = { width: 1, height: 1 }
+  internalFormat: InternalFormat // TODO: narrow options
 ): FramebufferRenderTarget {
   const idTextureDef = new TextureDefinition("R16UI");
   const valueTextureDef = new TextureDefinition(internalFormat);
-  return new FramebufferRenderTarget(gl, dimensions)
+  return FramebufferRenderTarget.createFitToViewport(gl)
     .withDepthTexture()
     .withColorTexture(0, idTextureDef)
     .withColorTexture(1, valueTextureDef);

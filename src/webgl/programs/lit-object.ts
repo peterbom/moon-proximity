@@ -93,22 +93,22 @@ const fragmentShaderSrcTemplate = /*glsl*/ `#version 300 es
   }
 `;
 
-type SharedAttribValues = {
+export type CommonLitObjectAttribValues = {
   a_position: (Vector2 | Vector3 | Vector4)[];
   a_normal: Vector3[];
 };
 
-export type ColorAttributeLitObjectAttribValues = SharedAttribValues & {
+export type ColorAttributeLitObjectAttribValues = CommonLitObjectAttribValues & {
   a_color: (Vector3 | Vector4)[];
 };
 
-export type TextureAttributeLitObjectAttribValues = SharedAttribValues & {
+export type TextureAttributeLitObjectAttribValues = CommonLitObjectAttribValues & {
   a_texcoord: Vector2[];
 };
 
-export type UniformColorLitObjectAttribValues = SharedAttribValues;
+export type UniformColorLitObjectAttribValues = CommonLitObjectAttribValues;
 
-type SharedUniformValues = {
+export type CommonLitObjectUniformValues = {
   u_worldMatrix: number[];
   u_matrix: number[];
   u_normalMatrix: number[];
@@ -119,13 +119,13 @@ type SharedUniformValues = {
   u_shininess: number;
 };
 
-export type ColorAttributeLitObjectUniformValues = SharedUniformValues;
+export type ColorAttributeLitObjectUniformValues = CommonLitObjectUniformValues;
 
-export type TextureAttributeLitObjectUniformValues = SharedUniformValues & {
+export type TextureAttributeLitObjectUniformValues = CommonLitObjectUniformValues & {
   u_texture: WebGLTexture;
 };
 
-export type UniformColorLitObjectUniformValues = SharedUniformValues & {
+export type UniformColorLitObjectUniformValues = CommonLitObjectUniformValues & {
   u_color: Vector4;
 };
 

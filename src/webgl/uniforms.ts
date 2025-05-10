@@ -1,8 +1,10 @@
-import { UniformName, UniformValues } from "./program-types";
+import type { UniformName, UniformSetters, UniformValues } from "./program-types";
 
-type UniformValueGetters<TValues extends UniformValues, TSupplied extends UniformName<TValues>, TContext, TObject> = {
-  [TName in TSupplied]: (ctx: TContext, obj: TObject) => TValues[TName];
-};
+type PerSceneGetter<TValues extends UniformValues, TContext> = (ctx: TContext) => Partial<TValues>;
+type PerObjectGetter<TValues extends UniformValues, TContext, TObject> = (
+  ctx: TContext,
+  obj: TObject
+) => Partial<TValues>;
 
 export class UniformCollector<
   TValues extends UniformValues,
@@ -10,10 +12,11 @@ export class UniformCollector<
   TContext = undefined,
   TObject = undefined
 > {
-  constructor(
-    private readonly perSceneUniforms: TSupplied[],
-    private readonly perObjectUniforms: TSupplied[],
-    private readonly getters: UniformValueGetters<TValues, TSupplied, TContext, TObject>
+  private constructor(
+    //private readonly perSceneUniforms: TSupplied[],
+    //private readonly perObjectUniforms: TSupplied[],
+    private readonly perSceneGetter: PerSceneGetter<TValues, TContext>,
+    private readonly perObjectGetter: PerObjectGetter<TValues, TContext, TObject>
   ) {}
 
   static create<TValues extends UniformValues, TContext = undefined, TObject = undefined>(): UniformCollector<
@@ -22,29 +25,9 @@ export class UniformCollector<
     TContext,
     TObject
   > {
-    return new UniformCollector([], [], {});
-  }
-
-  public withObjectUniform<TName extends UniformName<Omit<TValues, TSupplied>>>(
-    name: TName,
-    getter: (ctx: TContext, obj: TObject) => TValues[TName]
-  ): UniformCollector<TValues, TSupplied | TName, TContext, TObject> {
-    return new UniformCollector(this.perSceneUniforms, [...this.perObjectUniforms, name], {
-      ...this.getters,
-      [name]: getter,
-    } as UniformValueGetters<TValues, TSupplied | TName, TContext, TObject>);
-  }
-
-  public withObjectUniforms<TNames extends UniformName<Omit<TValues, TSupplied>>>(getters: {
-    [TName in TNames]: (ctx: TContext, obj: TObject) => TValues[TName];
-  }): UniformCollector<TValues, TSupplied | TNames, TContext, TObject> {
     return new UniformCollector(
-      this.perSceneUniforms,
-      [...this.perObjectUniforms, ...(Object.keys(getters) as TNames[])],
-      {
-        ...this.getters,
-        ...getters,
-      } as UniformValueGetters<TValues, TSupplied | TNames, TContext, TObject>
+      () => ({}),
+      () => ({})
     );
   }
 
@@ -52,34 +35,69 @@ export class UniformCollector<
     name: TName,
     getter: (ctx: TContext) => TValues[TName]
   ): UniformCollector<TValues, TSupplied | TName, TContext, TObject> {
-    return new UniformCollector([...this.perSceneUniforms, name], this.perObjectUniforms, {
-      ...this.getters,
-      [name]: getter,
-    } as UniformValueGetters<TValues, TSupplied | TName, TContext, TObject>);
+    const updatedGetter = (ctx: TContext) => ({
+      ...this.perSceneGetter(ctx),
+      [name]: getter(ctx),
+    });
+    return new UniformCollector(updatedGetter, this.perObjectGetter);
   }
 
-  public withSceneUniforms<TNames extends UniformName<Omit<TValues, TSupplied>>>(getters: {
-    [TName in TNames]: (ctx: TContext) => TValues[TName];
-  }): UniformCollector<TValues, TSupplied | TNames, TContext, TObject> {
-    return new UniformCollector(
-      [...this.perSceneUniforms, ...(Object.keys(getters) as TNames[])],
-      this.perObjectUniforms,
-      {
-        ...this.getters,
-        ...getters,
-      } as UniformValueGetters<TValues, TSupplied | TNames, TContext, TObject>
-    );
+  public withSceneUniforms<TNames extends UniformName<Omit<TValues, TSupplied>>>(
+    getter: (ctx: TContext) => {
+      [TName in TNames]: TValues[TName];
+    }
+  ): UniformCollector<TValues, TSupplied | TNames, TContext, TObject> {
+    const updatedGetter = (ctx: TContext) => ({
+      ...this.perSceneGetter(ctx),
+      ...getter(ctx),
+    });
+    return new UniformCollector(updatedGetter, this.perObjectGetter);
+  }
+
+  public withObjectUniform<TName extends UniformName<Omit<TValues, TSupplied>>>(
+    name: TName,
+    getter: (ctx: TContext, obj: TObject) => TValues[TName]
+  ): UniformCollector<TValues, TSupplied | TName, TContext, TObject> {
+    const updatedGetter = (ctx: TContext, obj: TObject) => ({
+      ...this.perObjectGetter(ctx, obj),
+      [name]: getter(ctx, obj),
+    });
+    return new UniformCollector(this.perSceneGetter, updatedGetter);
+  }
+
+  public withObjectUniforms<TNames extends UniformName<Omit<TValues, TSupplied>>>(
+    getter: (
+      ctx: TContext,
+      obj: TObject
+    ) => {
+      [TName in TNames]: TValues[TName];
+    }
+  ): UniformCollector<TValues, TSupplied | TNames, TContext, TObject> {
+    const updatedGetter = (ctx: TContext, obj: TObject) => ({
+      ...this.perObjectGetter(ctx, obj),
+      ...getter(ctx, obj),
+    });
+    return new UniformCollector(this.perSceneGetter, updatedGetter);
   }
 
   public getPerSceneUniforms(ctx: TContext): Partial<TValues> {
-    const self = this;
-    const entries = this.perSceneUniforms.map((name) => [name, self.getters[name](ctx, undefined as TObject)]);
-    return Object.fromEntries(entries);
+    return this.perSceneGetter(ctx);
   }
 
   public getPerObjectUniforms(ctx: TContext, obj: TObject): Partial<TValues> {
-    const self = this;
-    const entries = this.perObjectUniforms.map((name) => [name, self.getters[name](ctx, obj)]);
-    return Object.fromEntries(entries);
+    return this.perObjectGetter(ctx, obj);
   }
+}
+
+export function setUniforms<T extends UniformValues>(setters: UniformSetters<T>, values: Partial<T>) {
+  Object.entries(values).forEach(([name, value]) => {
+    const setter = setters[name];
+    if (setter) {
+      setter(value);
+    } else {
+      // Not an error. It's okay to specify values for uniforms that don't exist, such as when we use
+      // more than one program, or unused uniforms within a program have been optimized out.
+      console.info(`Missing setter for uniform: ${name}`);
+    }
+  });
 }

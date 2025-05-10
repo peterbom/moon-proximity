@@ -38,7 +38,7 @@ void main() {
 
 export type PickingAttribValues = {
   a_position: (Vector2 | Vector3 | Vector4)[];
-  a_value: (number | Vector2 | Vector3 | Vector4)[];
+  a_values: (number | Vector2 | Vector3 | Vector4)[];
 };
 
 export type PickingUniformValues = {

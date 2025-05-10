@@ -1,13 +1,17 @@
 import { createTextOverlay, OverlayElement, setAbsoluteStyleRect, setupSlider, StyleRect } from "../common/html-utils";
 import { IdGenerator } from "../common/id-generator";
 import { clamp, degToRad, radToDeg } from "../common/math";
+import { compose4 } from "../common/matrices";
 import type { SphericalCoordinate, Vector3, Vector4 } from "../common/numeric-types";
+import { scaleVector } from "../common/vectors";
 import {
   asAxialRotationFromUnitX,
   asScaleTransform,
   asTranslation,
   asYRotation,
   asZRotation,
+  getNormalTransformSeries,
+  getTransformSeriesMatrix,
   TransformSeries,
 } from "../common/xform";
 import {
@@ -20,20 +24,35 @@ import {
 import { Ephemeris } from "../ephemeris";
 import { createEllipsoidShapeData, createProximityShapeData } from "../geo-shape-data";
 import { getProximityLine } from "../proximity-line";
-import { Perigee, State } from "../state-types";
+import type { Perigee, State } from "../state-types";
+import { createVertexAttribsInfo } from "../webgl/attributes";
 import { addMouseListeners } from "../webgl/canvas-interaction";
 import { MultiViewContext } from "../webgl/context";
-import { CanvasCoordinates } from "../webgl/dimension-types";
+import type { CanvasCoordinates } from "../webgl/dimension-types";
 import { addDragHandlers, DragData } from "../webgl/drag-interaction";
 import { createPickingRenderTarget, MousePickResult } from "../webgl/picking-utils";
 import {
+  CommonLitObjectUniformValues,
   createTextureAttributeLitObjectProgramInfo,
+  createTextureAttributeLitObjectVao,
   createUniformColorLitObjectProgramInfo,
+  createUniformColorLitObjectVao,
+  TextureAttributeLitObjectUniformValues,
+  UniformColorLitObjectUniformValues,
 } from "../webgl/programs/lit-object";
-import { createPickingProgramInfo } from "../webgl/programs/picking";
-import { createUniformColorSimpleObjectProgramInfo } from "../webgl/programs/simple-object";
-import { ObjectWithId } from "../webgl/scene-types";
+import { createPickingProgramInfo, PickingUniformValues } from "../webgl/programs/picking";
+import {
+  ColorAttributeSimpleObjectUniformValues,
+  createColorAttributeSimpleObjectProgramInfo,
+  createColorAttributeSimpleObjectVao,
+  createUniformColorSimpleObjectProgramInfo,
+  createUniformColorSimpleObjectVao,
+  UniformColorSimpleObjectUniformValues,
+} from "../webgl/programs/simple-object";
+import type { ObjectWithId } from "../webgl/scene-types";
 import { createCircleShapeData, createPlaneShapeData, createStraightLineShapeData } from "../webgl/shape-generation";
+import { createDownloadingTexture } from "../webgl/texture-definition";
+import { UniformCollector } from "../webgl/uniforms";
 
 const idGenerator = new IdGenerator(1);
 
@@ -135,7 +154,7 @@ function runWithDate(
     show: true,
   };
 
-  const proximityLineObject: SimpleVertexColorSceneObject = {
+  const proximityShapeObject: SimpleVertexColorSceneObject = {
     id: idGenerator.getNextId(),
     name: "Moon closest proximity",
     getTransforms: (sceneInfo) => [
@@ -270,41 +289,96 @@ function runWithDate(
   }
 
   const gl = context.gl;
+
+  const earthTexture = createDownloadingTexture(gl, "/resources/2k_earth_daymap.jpg", "RGB8", [0, 0, 255, 255]);
+
   const texturedObjectProgramInfo = createTextureAttributeLitObjectProgramInfo(gl);
   const interpolatePickingProgramInfo = createPickingProgramInfo(gl, true);
   const pickingRenderTarget = createPickingRenderTarget(gl, "RG32F");
   const uniformColorLitObjectProgramInfo = createUniformColorLitObjectProgramInfo(gl);
+  const colorAttributeSimpleObjectProgramInfo = createColorAttributeSimpleObjectProgramInfo(gl);
   const uniformColorSimpleObjectProgramInfo = createUniformColorSimpleObjectProgramInfo(gl);
-  const simpleShapeProgramInfo = createSimpleShapeProgramInfo(gl);
 
-  const texturedEllipsoidVaoLookup = new VertexAttribsInfoLookup<
-    EllipsoidShapeData,
-    LitObjectAttrib<ColorSource.TextureAttribute>
-  >();
-  const pickingEllipsoidVaoLookup = new VertexAttribsInfoLookup<EllipsoidShapeData, PickingAttrib>();
-  const uniformColoredObjectVaoLookup = new VertexAttribsInfoLookup<ShapeData, LitObjectAttrib<ColorSource.Uniform>>();
-  const simpleVertexColorObjectVaoLookup = new VertexAttribsInfoLookup<ShapeData, SimpleShapeVertexColorAttributes>();
-  const simpleObjectVaoLookup = new VertexAttribsInfoLookup<ShapeData, SimpleShapeAttributes>();
-
-  texturedEllipsoidVaoLookup.setVao([earthObject], earthShapeData, getTexturedObjectVao);
-  pickingEllipsoidVaoLookup.setVao([earthObject], earthShapeData, getEarthPickingVao);
-  simpleVertexColorObjectVaoLookup.setVao(
-    [proximityLineObject],
-    proximityShapeData,
-    createSimpleShapeVertexColorVaoFromParams
+  const earthVaoInfo = createTextureAttributeLitObjectVao(gl, texturedObjectProgramInfo.attribSetters, earthShapeData);
+  const earthPickingVaoInfo = createVertexAttribsInfo(gl, interpolatePickingProgramInfo.attribSetters, {
+    attribsInfo: {
+      a_position: { type: gl.FLOAT, data: earthShapeData.positions },
+      a_values: { type: gl.FLOAT, data: earthShapeData.geodeticCoords },
+    },
+    indices: earthShapeData.indices,
+  });
+  const eclipticPlaneVaoInfo = createUniformColorLitObjectVao(
+    gl,
+    uniformColorLitObjectProgramInfo.attribSetters,
+    eclipticPlaneShapeData
   );
-  uniformColoredObjectVaoLookup.setVao([eclipticPlaneObject], eclipticPlaneShapeData, getUniformColoredObjectVao);
-  simpleObjectVaoLookup.setVao(lineObjects, straightLineShapeData, createSimpleShapeVaoFromParams);
-  simpleObjectVaoLookup.setVao(circleObjects, circleShapeData, createSimpleShapeVaoFromParams);
+  const lineVaoInfo = createUniformColorSimpleObjectVao(
+    gl,
+    uniformColorLitObjectProgramInfo.attribSetters,
+    straightLineShapeData
+  );
+  const circleVaoInfo = createUniformColorSimpleObjectVao(
+    gl,
+    uniformColorLitObjectProgramInfo.attribSetters,
+    circleShapeData
+  );
+  const proximityShapeVaoInfo = createColorAttributeSimpleObjectVao(
+    gl,
+    colorAttributeSimpleObjectProgramInfo.attribSetters,
+    proximityShapeData
+  );
 
-  const texturedObjectUniformCollector = new TexturedObjectUniformCollector(context, () => sceneInfo);
-  const uniformColoredObjectUniformCollector = new UniformColoredObjectUniformCollector(() => sceneInfo);
-  const simpleVertexColorShapeUniformCollector = new SimpleVertexColorShapeUniformCollector(() => sceneInfo);
-  const simpleShapeUniformCollector = new SimpleShapeUniformCollector(() => sceneInfo);
-  const pickingUniformCollector = createPickingUniformCollector(texturedObjectUniformCollector, (obj, values) => ({
-    u_id: obj.id,
-    u_matrix: values.u_matrix,
-  }));
+  const earthUniformCollector = UniformCollector.create<
+    TextureAttributeLitObjectUniformValues,
+    SceneContext,
+    TexturedSceneObject
+  >()
+    .withSceneUniforms(getCommonSharedLitSceneUniformValues)
+    .withSceneUniform("u_texture", () => earthTexture)
+    .withObjectUniforms(getCommonLitObjectUniformValues);
+
+  const uniformColorLitObjectUniformCollector = UniformCollector.create<
+    UniformColorLitObjectUniformValues,
+    SceneContext,
+    ColoredSceneObject
+  >()
+    .withSceneUniforms(getCommonSharedLitSceneUniformValues)
+    .withObjectUniforms(getCommonLitObjectUniformValues)
+    .withObjectUniform("u_color", (_ctx, obj) => obj.color);
+
+  const colorAttributeSimpleObjectUniformCollector = UniformCollector.create<
+    ColorAttributeSimpleObjectUniformValues,
+    SceneContext,
+    SimpleVertexColorSceneObject
+  >().withObjectUniform("u_matrix", (context, obj) => {
+    const worldMatrix = getTransformSeriesMatrix(obj.getTransforms(context.sceneInfo));
+    return compose4(worldMatrix, context.viewProjectionMatrix);
+  });
+
+  const uniformColorSimpleObjectUniformCollector = UniformCollector.create<
+    UniformColorSimpleObjectUniformValues,
+    SceneContext,
+    SimpleSceneObject
+  >().withObjectUniforms((context, obj) => {
+    const worldMatrix = getTransformSeriesMatrix(obj.getTransforms(context.sceneInfo));
+    const matrix = compose4(worldMatrix, context.viewProjectionMatrix);
+    return {
+      u_matrix: matrix,
+      u_color: obj.color,
+    };
+  });
+
+  const earthPickingUniformCollector = UniformCollector.create<
+    PickingUniformValues,
+    SceneContext,
+    TexturedSceneObject
+  >().withObjectUniforms((context, obj) => {
+    const { u_matrix } = getCommonLitObjectUniformValues(context, obj);
+    return {
+      u_id: obj.id,
+      u_matrix,
+    };
+  });
 
   const sceneRenderer = new SceneRenderer(gl);
   sceneRenderer.addSceneObjects(
@@ -374,88 +448,6 @@ function runWithDate(
 
   function drawScene(pixelRect: ElementRectangle) {
     sceneRenderer.render(pixelRect);
-  }
-}
-
-class TexturedObjectUniformCollector extends UniformCollector<
-  SceneContext,
-  TexturedSceneObject,
-  LitObjectUniformValues<ColorSource.TextureAttribute>,
-  PerSceneUniforms
-> {
-  private readonly texture: WebGLTexture;
-
-  constructor(context: MultiViewContext, private readonly getSceneInfo: () => SceneInfo) {
-    super();
-    const gl = context.gl;
-    this.texture = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, this.texture);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 255, 255]));
-
-    createImageLoadHandler("/images/moon-proximity/2k_earth_daymap.jpg", (image) => {
-      gl.bindTexture(gl.TEXTURE_2D, this.texture);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
-
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-
-      gl.generateMipmap(gl.TEXTURE_2D);
-      context.multiSceneDrawer.requestRedraw(context.virtualCanvas);
-    });
-  }
-
-  protected getSceneContextImpl(pixelRect: ElementRectangle): SceneContext {
-    return getSceneContext(this.getSceneInfo(), pixelRect);
-  }
-
-  protected getSceneUniformValuesImpl(
-    context: SceneContext
-  ): Pick<LitObjectUniformValues<ColorSource.TextureAttribute>, PerSceneUniforms> {
-    return getSharedSceneUniformValues(context);
-  }
-
-  public getObjectUniformValues(
-    context: SceneContext,
-    obj: TexturedSceneObject
-  ): Omit<LitObjectUniformValues<ColorSource.TextureAttribute>, PerSceneUniforms> {
-    return {
-      ...getSharedLitObjectUniformValues(context, obj),
-      u_texture: this.texture,
-    };
-  }
-}
-
-class UniformColoredObjectUniformCollector extends UniformCollector<
-  SceneContext,
-  ColoredSceneObject,
-  LitObjectUniformValues<ColorSource.Uniform>,
-  PerSceneUniforms
-> {
-  constructor(private readonly getSceneInfo: () => SceneInfo) {
-    super();
-  }
-
-  protected getSceneContextImpl(pixelRect: ElementRectangle): SceneContext {
-    const sceneInfo = this.getSceneInfo();
-    return getSceneContext(sceneInfo, pixelRect);
-  }
-
-  protected getSceneUniformValuesImpl(
-    context: SceneContext
-  ): Pick<LitObjectUniformValues<ColorSource.Uniform>, PerSceneUniforms> {
-    return getSharedSceneUniformValues(context);
-  }
-
-  public getObjectUniformValues(
-    context: SceneContext,
-    obj: ColoredSceneObject
-  ): Omit<LitObjectUniformValues<ColorSource.Uniform>, PerSceneUniforms> {
-    return {
-      ...getSharedLitObjectUniformValues(context, obj),
-      u_color: obj.color,
-    };
   }
 }
 
@@ -542,7 +534,12 @@ function getSceneContext(sceneInfo: SceneInfo, pixelRect: ElementRectangle): Sce
   return { sceneInfo, viewProjectionMatrix };
 }
 
-function getSharedSceneUniformValues(context: SceneContext): Pick<LitObjectSharedUniformValues, PerSceneUniforms> {
+function getCommonSharedLitSceneUniformValues(
+  context: SceneContext
+): Pick<
+  TextureAttributeLitObjectUniformValues,
+  "u_ambientColor" | "u_lightColor" | "u_lightPosition" | "u_cameraPosition"
+> {
   return {
     u_ambientColor: scaleVector(lightColor, ambientToDirect),
     u_lightColor: scaleVector(lightColor, 1 - ambientToDirect),
@@ -551,10 +548,10 @@ function getSharedSceneUniformValues(context: SceneContext): Pick<LitObjectShare
   };
 }
 
-function getSharedLitObjectUniformValues(
+function getCommonLitObjectUniformValues(
   context: SceneContext,
   obj: LitSceneObject
-): Omit<LitObjectSharedUniformValues, PerSceneUniforms> {
+): Pick<CommonLitObjectUniformValues, "u_worldMatrix" | "u_matrix" | "u_normalMatrix" | "u_shininess"> {
   const transforms = obj.getTransforms(context.sceneInfo);
   const worldMatrix = getTransformSeriesMatrix(transforms);
   const matrix = compose4(worldMatrix, context.viewProjectionMatrix);
@@ -659,8 +656,3 @@ type TexturedSceneObject = LitSceneObject;
 type ColoredSceneObject = LitSceneObject & {
   color: Vector4;
 };
-
-type PerSceneUniforms = keyof Pick<
-  LitObjectSharedUniformValues,
-  "u_lightPosition" | "u_cameraPosition" | "u_lightColor" | "u_ambientColor"
->;
