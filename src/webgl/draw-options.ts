@@ -6,17 +6,17 @@ type DrawOptionProperties = {
 };
 
 export class DrawOptions {
-  private properties: DrawOptionProperties;
+  private constructor(private readonly properties: DrawOptionProperties) {}
 
-  constructor() {
-    this.properties = {
+  public static default(): DrawOptions {
+    return new DrawOptions({
       cullFace: true,
       depthMask: true,
       depthTest: true,
       blendConfig: (gl) => {
         gl.disable(gl.BLEND);
       },
-    };
+    });
   }
 
   public cullFace(cullFace: boolean): DrawOptions {

@@ -1,3 +1,4 @@
+import type { ScreenRect } from "./dimension-types";
 import type { UniformName, UniformSetters, UniformValues } from "./program-types";
 
 type PerSceneGetter<TValues extends UniformValues, TContext> = (ctx: TContext) => Partial<TValues>;
@@ -9,23 +10,20 @@ type PerObjectGetter<TValues extends UniformValues, TContext, TObject> = (
 export class UniformCollector<
   TValues extends UniformValues,
   TSupplied extends UniformName<TValues> = never,
-  TContext = undefined,
+  TContext extends object = {},
   TObject = undefined
 > {
   private constructor(
-    //private readonly perSceneUniforms: TSupplied[],
-    //private readonly perObjectUniforms: TSupplied[],
+    private readonly contextGetter: (rect: ScreenRect) => TContext,
     private readonly perSceneGetter: PerSceneGetter<TValues, TContext>,
     private readonly perObjectGetter: PerObjectGetter<TValues, TContext, TObject>
   ) {}
 
-  static create<TValues extends UniformValues, TContext = undefined, TObject = undefined>(): UniformCollector<
-    TValues,
-    never,
-    TContext,
-    TObject
-  > {
+  static create<TValues extends UniformValues, TContext extends object = {}, TObject = undefined>(
+    contextGetter: (rect: ScreenRect) => TContext
+  ): UniformCollector<TValues, never, TContext, TObject> {
     return new UniformCollector(
+      contextGetter,
       () => ({}),
       () => ({})
     );
@@ -39,7 +37,7 @@ export class UniformCollector<
       ...this.perSceneGetter(ctx),
       [name]: getter(ctx),
     });
-    return new UniformCollector(updatedGetter, this.perObjectGetter);
+    return new UniformCollector(this.contextGetter, updatedGetter, this.perObjectGetter);
   }
 
   public withSceneUniforms<TNames extends UniformName<Omit<TValues, TSupplied>>>(
@@ -51,7 +49,7 @@ export class UniformCollector<
       ...this.perSceneGetter(ctx),
       ...getter(ctx),
     });
-    return new UniformCollector(updatedGetter, this.perObjectGetter);
+    return new UniformCollector(this.contextGetter, updatedGetter, this.perObjectGetter);
   }
 
   public withObjectUniform<TName extends UniformName<Omit<TValues, TSupplied>>>(
@@ -62,7 +60,7 @@ export class UniformCollector<
       ...this.perObjectGetter(ctx, obj),
       [name]: getter(ctx, obj),
     });
-    return new UniformCollector(this.perSceneGetter, updatedGetter);
+    return new UniformCollector(this.contextGetter, this.perSceneGetter, updatedGetter);
   }
 
   public withObjectUniforms<TNames extends UniformName<Omit<TValues, TSupplied>>>(
@@ -77,7 +75,11 @@ export class UniformCollector<
       ...this.perObjectGetter(ctx, obj),
       ...getter(ctx, obj),
     });
-    return new UniformCollector(this.perSceneGetter, updatedGetter);
+    return new UniformCollector(this.contextGetter, this.perSceneGetter, updatedGetter);
+  }
+
+  public getContext(rect: ScreenRect): TContext {
+    return this.contextGetter(rect);
   }
 
   public getPerSceneUniforms(ctx: TContext): Partial<TValues> {

@@ -97,6 +97,23 @@ export function asZRotation(angleInRadians: number): RotationXYZ {
 
 export type TransformSeries = Transform[];
 
+export type LocalWorldTransforms = {
+  localToWorldTransforms: TransformSeries;
+  localToWorldMatrix: number[];
+  worldToLocalTransforms: TransformSeries;
+  worldToLocalMatrix: number[];
+};
+
+export function getLocalWorldTransforms(localToWorldTransforms: TransformSeries): LocalWorldTransforms {
+  const worldToLocalTransforms = invertTransformSeries(localToWorldTransforms);
+  return {
+    localToWorldTransforms,
+    localToWorldMatrix: getTransformSeriesMatrix(localToWorldTransforms),
+    worldToLocalTransforms,
+    worldToLocalMatrix: getTransformSeriesMatrix(worldToLocalTransforms),
+  };
+}
+
 export function invertTransformSeries(series: TransformSeries): TransformSeries {
   return [...series].reverse().map(invertTransform);
 }

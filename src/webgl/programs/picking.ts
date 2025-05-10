@@ -3,7 +3,7 @@ import { PlaceholderReplacements, replacePlaceholders } from "../../common/text-
 import type { ProgramInfo } from "../program-types";
 import { createProgramInfo } from "../programs";
 
-const flatValuePlaceholder = "EXTRA_ATTRIBUTES";
+const flatValuePlaceholder = "FLAT_VALUE";
 
 const vertexShaderSrcTemplate = /*glsl*/ `#version 300 es
 in vec4 a_position;
@@ -51,7 +51,7 @@ export function createPickingProgramInfo(
   interpolateValues: boolean
 ): ProgramInfo<PickingAttribValues, PickingUniformValues> {
   const substitutions: PlaceholderReplacements = {
-    flatValuePlaceholder: interpolateValues ? "" : "flat ",
+    [flatValuePlaceholder]: interpolateValues ? "" : "flat ",
   };
 
   const vertexShaderSrc = replacePlaceholders(vertexShaderSrcTemplate, substitutions);

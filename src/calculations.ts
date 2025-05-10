@@ -1,15 +1,36 @@
-import { Vector2, Vector3 } from "./common/numeric-types";
+import type { Vector2, Vector3 } from "./common/numeric-types";
 import { dotProduct3, getMagnitude, normalize, subtractVectors } from "./common/vectors";
+import { asTranslation, getLocalWorldTransforms, LocalWorldTransforms } from "./common/xform";
 import { earthEquatorialRadius, earthPolarRadius } from "./constants";
 import { EarthMoonPositions, Ephemeris } from "./ephemeris";
 import { LatLongPosition } from "./geo-types";
-import { getAstronomicalTime } from "./time";
+import { AstronomicalTime, getAstronomicalTime } from "./time";
 
 export function getEarthMoonPositions(ephemeris: Ephemeris, unixTime: number): EarthMoonPositions {
   const date = new Date(unixTime);
   const time = getAstronomicalTime(date);
   const earthMoonBarycenterPosition = ephemeris.getEarthMoonBarycenterPosition(time);
   return ephemeris.getEarthAndMoonPositions(earthMoonBarycenterPosition, time);
+}
+
+export function getEarthLocalWorldTransforms(
+  ephemeris: Ephemeris,
+  time: AstronomicalTime,
+  earthWorldPosition: Vector3
+): LocalWorldTransforms {
+  const toWorldRotation = ephemeris.getEarthRotation(time);
+  const localToWorldTransforms = [...toWorldRotation.transforms, asTranslation(earthWorldPosition)];
+  return getLocalWorldTransforms(localToWorldTransforms);
+}
+
+export function getEclipticPlaneLocalWorldTransforms(
+  ephemeris: Ephemeris,
+  time: AstronomicalTime
+): LocalWorldTransforms {
+  const embPos = ephemeris.getEarthMoonBarycenterPosition(time);
+  const embVel = ephemeris.getEarthMoonBarycenterVelocity(time);
+  const eclipticPlane = ephemeris.getEclipticPlane(embPos, embVel);
+  return getLocalWorldTransforms([eclipticPlane.rotation]);
 }
 
 export function getDistance(positions: EarthMoonPositions): number {

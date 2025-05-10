@@ -145,8 +145,8 @@ export function setupSlider(canvasPlacementElement: Element, label: string, opti
     <input class="${sliderControl}" type="range" min="${sliderMin}" max="${sliderMax}" value="${sliderValue}" />
   `;
 
-  const valueElem = singleControlElement.querySelector(".single-control-value") as HTMLDivElement;
-  const sliderElem = singleControlElement.querySelector(".slider-control") as HTMLInputElement;
+  const valueElem = singleControlElement.querySelector(`.${singleControlValue}`) as HTMLDivElement;
+  const sliderElem = singleControlElement.querySelector(`.${sliderControl}`) as HTMLInputElement;
 
   function updateValue(sliderValue: number) {
     const displayValue = sliderValue * step;

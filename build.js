@@ -8,6 +8,7 @@ const sharedConfig = {
   loader: {
     ".html": "copy",
     ".dat": "copy",
+    ".jpg": "copy",
   },
   bundle: true,
   sourcemap: true,
