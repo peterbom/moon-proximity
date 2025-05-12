@@ -1,3 +1,4 @@
+import { Vector4 } from "../common/numeric-types";
 import type { RenderDimensions, ScreenRect } from "./dimension-types";
 import { TextureDefinition, TextureReadBufferInfo, TextureRenderProperties } from "./texture-definition";
 
@@ -139,9 +140,26 @@ export class FramebufferRenderTarget implements RenderTarget {
       throw new Error(`Texture with attachment index ${attachmentIndex} not found`);
     }
 
+    this.checkFramebufferStatus(true);
+
     const readBufferInfo = textureInfo.definition.createReadBuffer(rect);
     this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.framebuffer);
     this.gl.readBuffer(this.gl.COLOR_ATTACHMENT0 + textureInfo.attachmentIndex);
+
+    const requiredFormat = this.gl.getParameter(this.gl.IMPLEMENTATION_COLOR_READ_FORMAT);
+    if (requiredFormat !== readBufferInfo.format) {
+      throw new Error(
+        `${textureInfo.renderProperties.internalFormat}: Has format ${readBufferInfo.format} but requires ${requiredFormat}`
+      );
+    }
+
+    const requiredType = this.gl.getParameter(this.gl.IMPLEMENTATION_COLOR_READ_TYPE);
+    if (requiredType !== readBufferInfo.type) {
+      throw new Error(
+        `${textureInfo.renderProperties.internalFormat}: Has type ${readBufferInfo.type} but requires ${requiredType}`
+      );
+    }
+
     this.gl.readPixels(
       rect.xOffset,
       rect.yOffset,
@@ -204,7 +222,7 @@ export class FramebufferRenderTarget implements RenderTarget {
     canvasElem: HTMLCanvasElement,
     attachmentIndex: number,
     flipY: boolean,
-    adjustment: (n: number) => number
+    adjustment: (inputColor: Vector4) => Vector4 = ([r, g, b]) => [r, g, b, 255]
   ) {
     const { width, height } = this.dimensions;
     const readInfo = this.readColorTexture(attachmentIndex, { xOffset: 0, yOffset: 0, width, height });
@@ -224,16 +242,15 @@ export class FramebufferRenderTarget implements RenderTarget {
       for (let x = 0; x < width; x++) {
         const readPixelStartIndex = readRowStartIndex + x * readInfo.valuesPerPixel;
         const writePixelStartIndex = writeRowStartIndex + x * writePixelValueCount;
+
+        const inputColor: Vector4 = [0, 0, 0, 0];
+        for (let componentIndex = 0; componentIndex < readInfo.valuesPerPixel; componentIndex++) {
+          inputColor[componentIndex] = readInfo.buffer[readPixelStartIndex + componentIndex];
+        }
+
+        const outputColor = adjustment(inputColor);
         for (let componentIndex = 0; componentIndex < writePixelValueCount; componentIndex++) {
-          const writeIndex = writePixelStartIndex + componentIndex;
-          if (componentIndex < readInfo.valuesPerPixel) {
-            const readIndex = readPixelStartIndex + componentIndex;
-            outData[writeIndex] = readInfo.buffer[readIndex];
-          } else if (componentIndex === writePixelValueCount - 1) {
-            outData[writeIndex] = 255; // alpha
-          } else {
-            outData[writeIndex] = 0; // No corresponding source component data
-          }
+          outData[writePixelStartIndex + componentIndex] = outputColor[componentIndex];
         }
       }
     }

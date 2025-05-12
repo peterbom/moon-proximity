@@ -217,8 +217,8 @@ function makeCanvasCoordinates(
   // Convert the CSS space coordinates to pixel space, relative to the WebGL viewport.
   // Pixel coordinates start at (0,0) at the bottom left of the viewport.
   // https://webgl2fundamentals.org/webgl/lessons/webgl-multiple-views.html#pixel-coords
-  const pixelX = canvasCssX * canvasViewportDimensions.scaling.widthPerCssPixel;
-  const pixelY = cssYOffsetFromBottom * canvasViewportDimensions.scaling.heightPerCssPixel;
+  const pixelX = Math.round(canvasCssX * canvasViewportDimensions.scaling.widthPerCssPixel);
+  const pixelY = Math.round(cssYOffsetFromBottom * canvasViewportDimensions.scaling.heightPerCssPixel);
 
   const withinGLViewport =
     pixelX >= 0 &&

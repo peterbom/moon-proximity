@@ -2,6 +2,8 @@ import type { Vector4 } from "../common/numeric-types";
 import type { RenderDimensions, ScreenRect } from "./dimension-types";
 
 // https://registry.khronos.org/OpenGL-Refpages/es3.0/html/glTexImage2D.xhtml
+// Includes floating point formats enabled by the EXT_color_buffer_float extension
+// (https://developer.mozilla.org/en-US/docs/Web/API/EXT_color_buffer_float)
 const internalFormatValues = {
   R8: {
     value: WebGL2RenderingContext.R8,
@@ -10,26 +12,12 @@ const internalFormatValues = {
     type: WebGL2RenderingContext.UNSIGNED_BYTE,
     valuesPerPixel: 1,
   },
-  R32F: {
-    value: WebGL2RenderingContext.R32F,
-    arrayBufferCtor: Float32Array,
+  R16F: {
+    value: WebGL2RenderingContext.R16F,
+    arrayBufferCtor: Uint16Array,
     format: WebGL2RenderingContext.RED,
-    type: WebGL2RenderingContext.FLOAT,
+    type: WebGL2RenderingContext.HALF_FLOAT,
     valuesPerPixel: 1,
-  },
-  RGBA16F: {
-    value: WebGL2RenderingContext.RGBA16F,
-    arrayBufferCtor: Float32Array,
-    format: WebGL2RenderingContext.RGBA,
-    type: WebGL2RenderingContext.FLOAT,
-    valuesPerPixel: 1,
-  },
-  RG32F: {
-    value: WebGL2RenderingContext.RG32F,
-    arrayBufferCtor: Float32Array,
-    format: WebGL2RenderingContext.RG,
-    type: WebGL2RenderingContext.FLOAT,
-    valuesPerPixel: 2,
   },
   R16UI: {
     value: WebGL2RenderingContext.R16UI,
@@ -37,6 +25,27 @@ const internalFormatValues = {
     format: WebGL2RenderingContext.RED_INTEGER,
     type: WebGL2RenderingContext.UNSIGNED_SHORT,
     valuesPerPixel: 1,
+  },
+  R32F: {
+    value: WebGL2RenderingContext.R32F,
+    arrayBufferCtor: Uint16Array,
+    format: WebGL2RenderingContext.RED,
+    type: WebGL2RenderingContext.FLOAT,
+    valuesPerPixel: 1,
+  },
+  RG16F: {
+    value: WebGL2RenderingContext.RG16F,
+    arrayBufferCtor: Uint16Array,
+    format: WebGL2RenderingContext.RG,
+    type: WebGL2RenderingContext.FLOAT,
+    valuesPerPixel: 2,
+  },
+  RG32F: {
+    value: WebGL2RenderingContext.RG32F,
+    arrayBufferCtor: Float32Array,
+    format: WebGL2RenderingContext.RG,
+    type: WebGL2RenderingContext.FLOAT,
+    valuesPerPixel: 2,
   },
   RGB8: {
     value: WebGL2RenderingContext.RGB8,
@@ -50,6 +59,20 @@ const internalFormatValues = {
     arrayBufferCtor: Uint8Array,
     format: WebGL2RenderingContext.RGBA,
     type: WebGL2RenderingContext.UNSIGNED_BYTE,
+    valuesPerPixel: 4,
+  },
+  RGBA16F: {
+    value: WebGL2RenderingContext.RGBA16F,
+    arrayBufferCtor: Uint16Array,
+    format: WebGL2RenderingContext.RGBA,
+    type: WebGL2RenderingContext.HALF_FLOAT,
+    valuesPerPixel: 4,
+  },
+  RGBA32F: {
+    value: WebGL2RenderingContext.RGBA32F,
+    arrayBufferCtor: Float32Array,
+    format: WebGL2RenderingContext.RGBA,
+    type: WebGL2RenderingContext.FLOAT,
     valuesPerPixel: 4,
   },
   DEPTH_COMPONENT16: {

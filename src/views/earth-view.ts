@@ -162,7 +162,7 @@ export async function run(context: MultiViewContext, state: State) {
     vaos,
     earthTexture: createDownloadingTexture(gl, "/resources/2k_earth_daymap.jpg", "RGB8", [0, 0, 255, 255]),
     ephemeris,
-    pickingRenderTarget: createPickingRenderTarget(gl, "R32F"), // TODO: RG32F
+    pickingRenderTarget: createPickingRenderTarget(gl, "RGBA16F"),
   };
 
   state.selectedPerigee.subscribe((p) => runWithDate(context, state, resources, p));
@@ -350,11 +350,6 @@ function runWithDate(
     const isEarthObject = result.id === earthObject.id;
     setAbsoluteStyleRect(coordsOverlay.overlay, isEarthObject, styleRect);
 
-    // TODO: REMOVE
-    if (result.id !== 0) {
-      console.log(`Picked object ${result.id}`);
-    }
-
     if (isEarthObject) {
       const [lon, lat] = result.values;
       coordsOverlay.content.lat.textContent = radToDeg(lat).toFixed(2);
@@ -505,7 +500,7 @@ function runWithDate(
     sceneRenderer.render(pixelRect);
 
     // TODO: REMOVE
-    viewResources.pickingRenderTarget.drawToCanvas(canvasElem, 0, false, (n) => n);
+    viewResources.pickingRenderTarget.drawToCanvas(canvasElem, 1, false);
   }
 }
 

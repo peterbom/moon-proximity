@@ -6,7 +6,7 @@ import { InternalFormat, TextureDefinition } from "./texture-definition";
 
 export function createPickingRenderTarget(
   gl: WebGL2RenderingContext,
-  internalFormat: InternalFormat // TODO: narrow options
+  internalFormat: InternalFormat
 ): FramebufferRenderTarget {
   const idTextureDef = new TextureDefinition("R16UI");
   const valueTextureDef = new TextureDefinition(internalFormat);
