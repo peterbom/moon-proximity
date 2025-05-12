@@ -1,9 +1,7 @@
-import type { VertexAttribsInfo } from "./attributes-types";
 import type { ScreenRect } from "./dimension-types";
 import { DrawOptions } from "./draw-options";
-import type { AttribValues, ProgramInfo, UniformValues } from "./program-types";
+import type { AttribValues, DrawMode, ProgramInfo, UniformValues, VertexAttribsInfo } from "./program-types";
 import { RenderTarget } from "./render-target";
-import type { DrawMode } from "./shape-types";
 import { setUniforms, UniformCollector } from "./uniforms";
 
 export class SceneRenderer {
@@ -17,24 +15,29 @@ export class SceneRenderer {
   constructor(private readonly gl: WebGL2RenderingContext) {}
 
   public render(viewportRect: ScreenRect) {
-    const clearedRenderTargets = new Set<RenderTarget>();
     this.reset();
-    this.sceneObjectGroups.forEach((group) => {
-      const renderTarget = group.renderTarget;
-      const drawingRect = renderTarget.getDrawingRect(viewportRect);
 
-      this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, renderTarget.framebuffer);
+    this.gl.enable(this.gl.SCISSOR_TEST);
+    const clearedRenderTargets = new Set<RenderTarget>();
+    this.sceneObjectGroups.forEach((group) => {
+      if (!clearedRenderTargets.has(group.renderTarget)) {
+        const drawingRect = group.renderTarget.getDrawingRect(viewportRect);
+        this.gl.scissor(drawingRect.xOffset, drawingRect.yOffset, drawingRect.width, drawingRect.height);
+        group.renderTarget.clear();
+        clearedRenderTargets.add(group.renderTarget);
+      }
+    });
+
+    this.sceneObjectGroups.forEach((group) => {
+      const drawingRect = group.renderTarget.getDrawingRect(viewportRect);
+
+      this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, group.renderTarget.framebuffer);
       group.setProgram();
       group.setSceneContext(drawingRect);
       group.setSceneUniforms();
 
-      this.gl.enable(this.gl.SCISSOR_TEST);
       this.gl.viewport(drawingRect.xOffset, drawingRect.yOffset, drawingRect.width, drawingRect.height);
       this.gl.scissor(drawingRect.xOffset, drawingRect.yOffset, drawingRect.width, drawingRect.height);
-      if (!clearedRenderTargets.has(renderTarget)) {
-        this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
-        clearedRenderTargets.add(renderTarget);
-      }
 
       group.drawOptions.setOptions(this.gl);
       group.sceneObjects.forEach((obj) => {

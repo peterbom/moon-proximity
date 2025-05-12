@@ -1,8 +1,5 @@
+import type { Cleaner } from "../common/cleanup";
 import type { CanvasCoordinates, CanvasViewportDimensions, ScreenRect } from "./dimension-types";
-
-export interface HandlerCleanup {
-  clean(): void;
-}
 
 export type MoveHandler = (coords: CanvasCoordinates) => void;
 export type ScrollHandler = (coords: CanvasCoordinates, delta: number) => void;
@@ -16,7 +13,7 @@ export function addMouseListeners(
   combinedCanvas: HTMLCanvasElement,
   virtualCanvas: HTMLElement,
   listeners: MouseEventListeners
-): HandlerCleanup {
+): Cleaner {
   const moveHandler = listeners.move;
   const scrollHandler = listeners.scroll;
 
@@ -75,7 +72,7 @@ export function addTouchEventListeners(
   combinedCanvas: HTMLCanvasElement,
   virtualCanvas: HTMLElement,
   listeners: TouchEventListeners
-): HandlerCleanup {
+): Cleaner {
   virtualCanvas.addEventListener("mousedown", mouse_down, false);
   virtualCanvas.addEventListener("touchstart", touch_down, false);
   let touchIdentifier: number | null = null;
@@ -193,10 +190,10 @@ export function getCanvasViewportDimensions(
   // If a measurement is 3 CSS pixels and widthPerCssPixel is 2 (canvas pixels per CSS pixel),
   // the pixel measurement is 3x2.
   const pixelRect: ScreenRect = {
-    xOffset: cssRect.xOffset * widthPerCssPixel,
-    yOffset: cssYOffsetFromBottom * heightPerCssPixel,
-    width: cssRect.width * widthPerCssPixel,
-    height: cssRect.height * heightPerCssPixel,
+    xOffset: Math.round(cssRect.xOffset * widthPerCssPixel),
+    yOffset: Math.round(cssYOffsetFromBottom * heightPerCssPixel),
+    width: Math.round(cssRect.width * widthPerCssPixel),
+    height: Math.round(cssRect.height * heightPerCssPixel),
   };
   return {
     cssRect,

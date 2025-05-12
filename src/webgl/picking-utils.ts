@@ -1,6 +1,6 @@
 import type { Vector4 } from "../common/numeric-types";
 import { addMouseListeners, MouseEventListeners } from "./canvas-interaction";
-import type { CanvasCoordinates, RenderDimensions, ScreenRect } from "./dimension-types";
+import type { CanvasCoordinates, ScreenRect } from "./dimension-types";
 import { FramebufferRenderTarget } from "./render-target";
 import { InternalFormat, TextureDefinition } from "./texture-definition";
 
@@ -24,7 +24,6 @@ export interface MouseMovePickingHandlers {
 }
 
 export function createMouseMovePicking(
-  gl: WebGL2RenderingContext,
   combinedCanvas: HTMLCanvasElement,
   virtualCanvas: HTMLElement,
   pickingRenderTarget: FramebufferRenderTarget,

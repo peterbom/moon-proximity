@@ -1,8 +1,9 @@
+import type { Cleaner } from "../common/cleanup";
 import { makeIdentity4, makeRotationOnAxis, multiply4 } from "../common/matrices";
-import { Vector3 } from "../common/numeric-types";
+import type { Vector3 } from "../common/numeric-types";
 import { crossProduct3, getMagnitude, normalize, scaleVector, subtractVectors } from "../common/vectors";
-import { addTouchEventListeners, HandlerCleanup, TouchEventListeners } from "./canvas-interaction";
-import { CanvasCoordinates } from "./dimension-types";
+import { addTouchEventListeners, TouchEventListeners } from "./canvas-interaction";
+import type { CanvasCoordinates } from "./dimension-types";
 
 const speedDropoffPerMs = 1 / 200;
 
@@ -37,7 +38,7 @@ export function addDragHandlers(
   combinedCanvas: HTMLCanvasElement,
   virtualCanvas: HTMLElement,
   callback: DragCallback
-): HandlerCleanup {
+): Cleaner {
   const tracking: DragTracking = {
     callback,
     spinRequestHandle: 0,

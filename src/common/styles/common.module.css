@@ -80,7 +80,6 @@
   pointer-events: none; /* make overlay transparent to mouse events */
 }
 
-.textureContainer {
+.absolute {
   position: absolute;
-  background-color: transparent;
 }

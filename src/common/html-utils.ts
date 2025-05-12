@@ -1,5 +1,6 @@
 import { Vector4 } from "./numeric-types";
 import {
+  absolute,
   canvasOverlay,
   combinedCanvas,
   controlGroup,
@@ -193,4 +194,13 @@ function getOrCreateSingleControlElement(controlGroupElem: Element, label: strin
   controlGroupElem.appendChild(singleControlElement);
 
   return singleControlElement;
+}
+
+export function createAbsolutePositionCanvas(canvasPlacementElement: Element, position: StyleRect): HTMLCanvasElement {
+  const relativeContainerElem = getRelativeContainerOrError(canvasPlacementElement);
+  const canvasElem = document.createElement("canvas");
+  canvasElem.classList.add(absolute);
+  setAbsoluteStyleRect(canvasElem, true, position);
+  relativeContainerElem.appendChild(canvasElem);
+  return canvasElem;
 }

@@ -1,8 +1,7 @@
 import type { Vector2, Vector3, Vector4 } from "../../common/numeric-types";
 import { replacePlaceholders } from "../../common/text-utils";
 import { createVertexAttribsInfo } from "../attributes";
-import type { SourceAttribsInfo, VertexAttribsInfo } from "../attributes-types";
-import type { AttribSetters, ProgramInfo } from "../program-types";
+import type { AttribSetters, ProgramInfo, SourceAttribsInfo, VertexAttribsInfo } from "../program-types";
 import { createProgramInfo } from "../programs";
 import type { ShapeData } from "../shape-types";
 

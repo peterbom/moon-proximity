@@ -185,7 +185,7 @@ function createUniformSetter(
   if (type === gl.FLOAT_MAT4) {
     return (v: Iterable<number>) => gl.uniformMatrix4fv(location, false, v);
   }
-  if ((type === gl.SAMPLER_2D || type === gl.SAMPLER_CUBE) && isArray) {
+  if ((type === gl.SAMPLER_2D || type === gl.SAMPLER_CUBE || type === gl.UNSIGNED_INT_SAMPLER_2D) && isArray) {
     const units = Array.from({ length: uniformInfo.size }, getTextureUnit);
     const bindPoint = getBindPointForSamplerType(gl, type);
 
@@ -197,7 +197,7 @@ function createUniformSetter(
       });
     };
   }
-  if (type === gl.SAMPLER_2D || type === gl.SAMPLER_CUBE) {
+  if (type === gl.SAMPLER_2D || type === gl.SAMPLER_CUBE || type === gl.UNSIGNED_INT_SAMPLER_2D) {
     const bindPoint = getBindPointForSamplerType(gl, type);
     const unit = getTextureUnit();
 
@@ -208,11 +208,11 @@ function createUniformSetter(
     };
   }
 
-  throw "unknown type: 0x" + type.toString(16); // we should never get here.
+  throw `Not implemented uniform setter for type ${type}`;
 }
 
 function getBindPointForSamplerType(gl: WebGL2RenderingContext, type: GLenum) {
-  if (type === gl.SAMPLER_2D) return gl.TEXTURE_2D; // eslint-disable-line
+  if (type === gl.SAMPLER_2D || type === gl.UNSIGNED_INT_SAMPLER_2D) return gl.TEXTURE_2D; // eslint-disable-line
   if (type === gl.SAMPLER_CUBE) return gl.TEXTURE_CUBE_MAP; // eslint-disable-line
   throw new Error(`unknown sampler type: ${type}`);
 }

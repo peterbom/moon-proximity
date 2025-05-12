@@ -3,7 +3,15 @@ import {
   getEclipticPlaneLocalWorldTransforms,
   getLatLongPosition,
 } from "../calculations";
-import { createTextOverlay, OverlayElement, setAbsoluteStyleRect, setupSlider, StyleRect } from "../common/html-utils";
+import { Cleanup } from "../common/cleanup";
+import {
+  createAbsolutePositionCanvas,
+  createTextOverlay,
+  OverlayElement,
+  setAbsoluteStyleRect,
+  setupSlider,
+  StyleRect,
+} from "../common/html-utils";
 import { IdGenerator } from "../common/id-generator";
 import { clamp, degToRad, radToDeg } from "../common/math";
 import { compose4, makeViewProjectionMatrices } from "../common/matrices";
@@ -42,32 +50,39 @@ import type { CanvasCoordinates, ScreenRect } from "../webgl/dimension-types";
 import { addDragHandlers, DragData } from "../webgl/drag-interaction";
 import { DrawOptions } from "../webgl/draw-options";
 import { createMouseMovePicking, createPickingRenderTarget, MousePickResult } from "../webgl/picking-utils";
+import { ProgramInfo, VertexAttribsInfo } from "../webgl/program-types";
 import {
+  CommonLitObjectAttribValues,
   CommonLitObjectUniformValues,
   createTextureAttributeLitObjectProgramInfo,
   createTextureAttributeLitObjectVao,
   createUniformColorLitObjectProgramInfo,
   createUniformColorLitObjectVao,
+  TextureAttributeLitObjectAttribValues,
   TextureAttributeLitObjectUniformValues,
   UniformColorLitObjectUniformValues,
 } from "../webgl/programs/lit-object";
-import { createPickingProgramInfo, PickingUniformValues } from "../webgl/programs/picking";
+import { createPickingProgramInfo, PickingAttribValues, PickingUniformValues } from "../webgl/programs/picking";
 import {
+  ColorAttributeSimpleObjectAttribValues,
   ColorAttributeSimpleObjectUniformValues,
+  CommonSimpleObjectAttribValues,
+  CommonSimpleObjectUniformValues,
   createColorAttributeSimpleObjectProgramInfo,
   createColorAttributeSimpleObjectVao,
   createUniformColorSimpleObjectProgramInfo,
   createUniformColorSimpleObjectVao,
   UniformColorSimpleObjectUniformValues,
 } from "../webgl/programs/simple-object";
-import { ScreenRenderTarget } from "../webgl/render-target";
+import { FramebufferRenderTarget, ScreenRenderTarget } from "../webgl/render-target";
 import { SceneRenderer } from "../webgl/scene-renderer";
 import type { ObjectWithId } from "../webgl/scene-types";
 import { createCircleShapeData, createPlaneShapeData, createStraightLineShapeData } from "../webgl/shape-generation";
-import { createDownloadingTexture } from "../webgl/texture-definition";
+import { createDownloadingTexture } from "../webgl/texture-utils";
 import { UniformCollector } from "../webgl/uniforms";
 
 const idGenerator = new IdGenerator(1);
+const cleanup = new Cleanup();
 
 const timeStepMs = 1000 * 60;
 const lightColor = sunlightColor;
@@ -105,20 +120,59 @@ function getCoordElems(parent: Element): CoordElems {
 }
 
 export async function run(context: MultiViewContext, state: State) {
-  const overlays: Overlays = {
-    coords: createTextOverlay(context.virtualCanvas, coordDisplayHtml, getCoordElems),
+  const ephemeris = await state.ephPromise;
+
+  const gl = context.gl;
+
+  const textureAttributeLitObjectProgramInfo = createTextureAttributeLitObjectProgramInfo(gl);
+  const interpolatePickingProgramInfo = createPickingProgramInfo(gl, true);
+  const uniformColorLitObjectProgramInfo = createUniformColorLitObjectProgramInfo(gl);
+  const colorAttributeSimpleObjectProgramInfo = createColorAttributeSimpleObjectProgramInfo(gl);
+  const uniformColorSimpleObjectProgramInfo = createUniformColorSimpleObjectProgramInfo(gl);
+
+  const vaos = {
+    earth: createTextureAttributeLitObjectVao(gl, textureAttributeLitObjectProgramInfo.attribSetters, earthShapeData),
+    earthPicking: createVertexAttribsInfo(gl, interpolatePickingProgramInfo.attribSetters, {
+      attribsInfo: {
+        a_position: { type: gl.FLOAT, data: earthShapeData.positions },
+        a_values: { type: gl.FLOAT, data: earthShapeData.geodeticCoords },
+      },
+      indices: earthShapeData.indices,
+    }),
+    eclipticPlane: createUniformColorLitObjectVao(
+      gl,
+      uniformColorLitObjectProgramInfo.attribSetters,
+      eclipticPlaneShapeData
+    ),
+    line: createUniformColorSimpleObjectVao(gl, uniformColorLitObjectProgramInfo.attribSetters, straightLineShapeData),
+    circle: createUniformColorSimpleObjectVao(gl, uniformColorLitObjectProgramInfo.attribSetters, circleShapeData),
   };
 
-  const ephemeris = await state.ephPromise;
-  state.selectedPerigee.subscribe((p) => runWithDate(context, state, ephemeris, overlays, p));
-  runWithDate(context, state, ephemeris, overlays, state.selectedPerigee.getValue());
+  const resources: ViewResources = {
+    overlays: {
+      coords: createTextOverlay(context.virtualCanvas, coordDisplayHtml, getCoordElems),
+    },
+    programs: {
+      textureAttributeLitObjectProgramInfo,
+      interpolatePickingProgramInfo,
+      uniformColorLitObjectProgramInfo,
+      colorAttributeSimpleObjectProgramInfo,
+      uniformColorSimpleObjectProgramInfo,
+    },
+    vaos,
+    earthTexture: createDownloadingTexture(gl, "/resources/2k_earth_daymap.jpg", "RGB8", [0, 0, 255, 255]),
+    ephemeris,
+    pickingRenderTarget: createPickingRenderTarget(gl, "R32F"), // TODO: RG32F
+  };
+
+  state.selectedPerigee.subscribe((p) => runWithDate(context, state, resources, p));
+  runWithDate(context, state, resources, state.selectedPerigee.getValue());
 }
 
 function runWithDate(
   context: MultiViewContext,
   state: State,
-  ephemeris: Ephemeris,
-  overlays: Overlays,
+  viewResources: ViewResources,
   selectedPerigee: Perigee | null
 ) {
   if (selectedPerigee === null) {
@@ -135,6 +189,7 @@ function runWithDate(
     },
   });
 
+  const ephemeris = viewResources.ephemeris;
   let sceneInfo = getSceneInfo(ephemeris, selectedPerigee.date);
   const maxTimeRangeSeconds = 60 * 60 * 24;
   const proximityLine = getProximityLine(ephemeris, sceneInfo.time, highlightClosestKmCount, maxTimeRangeSeconds, 60);
@@ -147,7 +202,7 @@ function runWithDate(
 
   state.proximityShapeData.setValue(proximityShapeData);
 
-  const earthObject: TexturedSceneObject = {
+  const earthObject: LitSceneObject = {
     id: idGenerator.getNextId(),
     name: "Earth",
     getTransforms: (sceneInfo) => sceneInfo.earthLocalWorldTransforms.localToWorldTransforms,
@@ -155,7 +210,7 @@ function runWithDate(
     show: true,
   };
 
-  const eclipticPlaneObject: ColoredSceneObject = {
+  const eclipticPlaneObject: UniformColorLitSceneObject = {
     id: idGenerator.getNextId(),
     name: "Ecliptic plane",
     getTransforms: (sceneInfo) => [
@@ -167,7 +222,7 @@ function runWithDate(
     show: true,
   };
 
-  const proximityShapeObject: SimpleVertexColorSceneObject = {
+  const proximityShapeObject: CommonSceneObject = {
     id: idGenerator.getNextId(),
     name: "Moon closest proximity",
     getTransforms: (sceneInfo) => [
@@ -177,7 +232,7 @@ function runWithDate(
     show: true,
   };
 
-  const lineObjects: SimpleSceneObject[] = [
+  const lineObjects: UniformColorSceneObject[] = [
     {
       id: idGenerator.getNextId(),
       name: "Earth to sun",
@@ -246,7 +301,7 @@ function runWithDate(
     },
   ];
 
-  const circleObjects: SimpleSceneObject[] = [
+  const circleObjects: UniformColorSceneObject[] = [
     {
       id: idGenerator.getNextId(),
       name: "Equator",
@@ -291,73 +346,45 @@ function runWithDate(
       top: coords.canvasCssY,
     };
 
+    const coordsOverlay = viewResources.overlays.coords;
     const isEarthObject = result.id === earthObject.id;
-    setAbsoluteStyleRect(overlays.coords.overlay, isEarthObject, styleRect);
+    setAbsoluteStyleRect(coordsOverlay.overlay, isEarthObject, styleRect);
+
+    // TODO: REMOVE
+    if (result.id !== 0) {
+      console.log(`Picked object ${result.id}`);
+    }
 
     if (isEarthObject) {
       const [lon, lat] = result.values;
-      overlays.coords.content.lat.textContent = radToDeg(lat).toFixed(2);
-      overlays.coords.content.lon.textContent = radToDeg(lon).toFixed(2);
+      coordsOverlay.content.lat.textContent = radToDeg(lat).toFixed(2);
+      coordsOverlay.content.lon.textContent = radToDeg(lon).toFixed(2);
     }
   }
 
   const gl = context.gl;
 
-  const earthTexture = createDownloadingTexture(gl, "/resources/2k_earth_daymap.jpg", "RGB8", [0, 0, 255, 255]);
-
-  const textureAttributeLitObjectProgramInfo = createTextureAttributeLitObjectProgramInfo(gl);
-  const interpolatePickingProgramInfo = createPickingProgramInfo(gl, true);
-  const pickingRenderTarget = createPickingRenderTarget(gl, "RG32F");
-  const uniformColorLitObjectProgramInfo = createUniformColorLitObjectProgramInfo(gl);
-  const colorAttributeSimpleObjectProgramInfo = createColorAttributeSimpleObjectProgramInfo(gl);
-  const uniformColorSimpleObjectProgramInfo = createUniformColorSimpleObjectProgramInfo(gl);
-
-  const earthVaoInfo = createTextureAttributeLitObjectVao(
-    gl,
-    textureAttributeLitObjectProgramInfo.attribSetters,
-    earthShapeData
-  );
-  const earthPickingVaoInfo = createVertexAttribsInfo(gl, interpolatePickingProgramInfo.attribSetters, {
-    attribsInfo: {
-      a_position: { type: gl.FLOAT, data: earthShapeData.positions },
-      a_values: { type: gl.FLOAT, data: earthShapeData.geodeticCoords },
-    },
-    indices: earthShapeData.indices,
-  });
-  const eclipticPlaneVaoInfo = createUniformColorLitObjectVao(
-    gl,
-    uniformColorLitObjectProgramInfo.attribSetters,
-    eclipticPlaneShapeData
-  );
-  const lineVaoInfo = createUniformColorSimpleObjectVao(
-    gl,
-    uniformColorLitObjectProgramInfo.attribSetters,
-    straightLineShapeData
-  );
-  const circleVaoInfo = createUniformColorSimpleObjectVao(
-    gl,
-    uniformColorLitObjectProgramInfo.attribSetters,
-    circleShapeData
-  );
   const proximityShapeVaoInfo = createColorAttributeSimpleObjectVao(
     gl,
-    colorAttributeSimpleObjectProgramInfo.attribSetters,
+    viewResources.programs.colorAttributeSimpleObjectProgramInfo.attribSetters,
     proximityShapeData
   );
+
+  cleanup.add(proximityShapeVaoInfo);
 
   const earthUniformCollector = UniformCollector.create<
     TextureAttributeLitObjectUniformValues,
     SceneContext,
-    TexturedSceneObject
+    LitSceneObject
   >((rect) => getSceneContext(sceneInfo, rect))
     .withSceneUniforms(getCommonSharedLitSceneUniformValues)
-    .withSceneUniform("u_texture", () => earthTexture)
+    .withSceneUniform("u_texture", () => viewResources.earthTexture)
     .withObjectUniforms(getCommonLitObjectUniformValues);
 
   const uniformColorLitObjectUniformCollector = UniformCollector.create<
     UniformColorLitObjectUniformValues,
     SceneContext,
-    ColoredSceneObject
+    UniformColorLitSceneObject
   >((rect) => getSceneContext(sceneInfo, rect))
     .withSceneUniforms(getCommonSharedLitSceneUniformValues)
     .withObjectUniforms(getCommonLitObjectUniformValues)
@@ -366,7 +393,7 @@ function runWithDate(
   const colorAttributeSimpleObjectUniformCollector = UniformCollector.create<
     ColorAttributeSimpleObjectUniformValues,
     SceneContext,
-    SimpleVertexColorSceneObject
+    CommonSceneObject
   >((rect) => getSceneContext(sceneInfo, rect)).withObjectUniform("u_matrix", (context, obj) => {
     const worldMatrix = getTransformSeriesMatrix(obj.getTransforms(context.sceneInfo));
     return compose4(worldMatrix, context.viewProjectionMatrix);
@@ -375,7 +402,7 @@ function runWithDate(
   const uniformColorSimpleObjectUniformCollector = UniformCollector.create<
     UniformColorSimpleObjectUniformValues,
     SceneContext,
-    SimpleSceneObject
+    UniformColorSceneObject
   >((rect) => getSceneContext(sceneInfo, rect)).withObjectUniforms((context, obj) => {
     const worldMatrix = getTransformSeriesMatrix(obj.getTransforms(context.sceneInfo));
     const matrix = compose4(worldMatrix, context.viewProjectionMatrix);
@@ -385,7 +412,7 @@ function runWithDate(
     };
   });
 
-  const earthPickingUniformCollector = UniformCollector.create<PickingUniformValues, SceneContext, TexturedSceneObject>(
+  const earthPickingUniformCollector = UniformCollector.create<PickingUniformValues, SceneContext, LitSceneObject>(
     (rect) => getSceneContext(sceneInfo, rect)
   ).withObjectUniforms((context, obj) => {
     const { u_matrix } = getCommonLitObjectUniformValues(context, obj);
@@ -395,15 +422,15 @@ function runWithDate(
     };
   });
 
-  const screenRenderTarget = new ScreenRenderTarget();
+  const screenRenderTarget = new ScreenRenderTarget(gl);
 
   const sceneRenderer = new SceneRenderer(gl);
 
   sceneRenderer.addSceneObjects(
     [earthObject].filter((o) => o.show),
     earthUniformCollector,
-    textureAttributeLitObjectProgramInfo,
-    earthVaoInfo,
+    viewResources.programs.textureAttributeLitObjectProgramInfo,
+    viewResources.vaos.earth,
     screenRenderTarget,
     DrawOptions.default()
   );
@@ -411,17 +438,17 @@ function runWithDate(
   sceneRenderer.addSceneObjects(
     [earthObject].filter((o) => o.show),
     earthPickingUniformCollector,
-    interpolatePickingProgramInfo,
-    earthPickingVaoInfo,
-    pickingRenderTarget,
+    viewResources.programs.interpolatePickingProgramInfo,
+    viewResources.vaos.earthPicking,
+    viewResources.pickingRenderTarget,
     DrawOptions.default()
   );
 
   sceneRenderer.addSceneObjects(
     [eclipticPlaneObject].filter((o) => o.show),
     uniformColorLitObjectUniformCollector,
-    uniformColorLitObjectProgramInfo,
-    eclipticPlaneVaoInfo,
+    viewResources.programs.uniformColorLitObjectProgramInfo,
+    viewResources.vaos.eclipticPlane,
     screenRenderTarget,
     DrawOptions.default().blend(true).depthMask(false).depthTest(true)
   );
@@ -429,7 +456,7 @@ function runWithDate(
   sceneRenderer.addSceneObjects(
     [proximityShapeObject].filter((o) => o.show),
     colorAttributeSimpleObjectUniformCollector,
-    colorAttributeSimpleObjectProgramInfo,
+    viewResources.programs.colorAttributeSimpleObjectProgramInfo,
     proximityShapeVaoInfo,
     screenRenderTarget,
     DrawOptions.default().blend(true)
@@ -438,8 +465,8 @@ function runWithDate(
   sceneRenderer.addSceneObjects(
     lineObjects.filter((o) => o.show),
     uniformColorSimpleObjectUniformCollector,
-    uniformColorSimpleObjectProgramInfo,
-    lineVaoInfo,
+    viewResources.programs.uniformColorSimpleObjectProgramInfo,
+    viewResources.vaos.line,
     screenRenderTarget,
     DrawOptions.default()
   );
@@ -447,20 +474,38 @@ function runWithDate(
   sceneRenderer.addSceneObjects(
     circleObjects.filter((o) => o.show),
     uniformColorSimpleObjectUniformCollector,
-    uniformColorSimpleObjectProgramInfo,
-    circleVaoInfo,
+    viewResources.programs.uniformColorSimpleObjectProgramInfo,
+    viewResources.vaos.circle,
     screenRenderTarget,
     DrawOptions.default()
   );
 
-  addDragHandlers(context.combinedCanvas, context.virtualCanvas, handleMouseDrag);
-  addMouseListeners(context.combinedCanvas, context.virtualCanvas, { scroll: handleZoom });
-  createMouseMovePicking(gl, context.combinedCanvas, context.virtualCanvas, pickingRenderTarget, handleMousePick);
+  cleanup.add(addDragHandlers(context.combinedCanvas, context.virtualCanvas, handleMouseDrag));
+  cleanup.add(addMouseListeners(context.combinedCanvas, context.virtualCanvas, { scroll: handleZoom }));
+  cleanup.add(
+    createMouseMovePicking(
+      context.combinedCanvas,
+      context.virtualCanvas,
+      viewResources.pickingRenderTarget,
+      handleMousePick
+    )
+  );
 
   context.multiSceneDrawer.registerStillDrawer(context.virtualCanvas, drawScene);
 
+  // TODO: REMOVE
+  const canvasElem = createAbsolutePositionCanvas(context.virtualCanvas, {
+    width: context.virtualCanvas.clientWidth,
+    height: context.virtualCanvas.clientHeight,
+    left: 0,
+    top: context.virtualCanvas.clientHeight + 5,
+  });
+
   function drawScene(pixelRect: ScreenRect) {
     sceneRenderer.render(pixelRect);
+
+    // TODO: REMOVE
+    viewResources.pickingRenderTarget.drawToCanvas(canvasElem, 0, false, (n) => n);
   }
 }
 
@@ -556,8 +601,42 @@ function getSceneInfo(ephemeris: Ephemeris, date: Date): SceneInfo {
   };
 }
 
+type ViewResources = {
+  overlays: Overlays;
+  programs: Programs;
+  vaos: VaoInfos;
+  pickingRenderTarget: FramebufferRenderTarget;
+  earthTexture: WebGLTexture;
+  ephemeris: Ephemeris;
+};
+
 type Overlays = {
   coords: OverlayElement<CoordElems>;
+};
+
+type Programs = {
+  textureAttributeLitObjectProgramInfo: ProgramInfo<
+    TextureAttributeLitObjectAttribValues,
+    TextureAttributeLitObjectUniformValues
+  >;
+  interpolatePickingProgramInfo: ProgramInfo<PickingAttribValues, PickingUniformValues>;
+  uniformColorLitObjectProgramInfo: ProgramInfo<CommonLitObjectAttribValues, UniformColorLitObjectUniformValues>;
+  colorAttributeSimpleObjectProgramInfo: ProgramInfo<
+    ColorAttributeSimpleObjectAttribValues,
+    CommonSimpleObjectUniformValues
+  >;
+  uniformColorSimpleObjectProgramInfo: ProgramInfo<
+    CommonSimpleObjectAttribValues,
+    UniformColorSimpleObjectUniformValues
+  >;
+};
+
+type VaoInfos = {
+  earth: VertexAttribsInfo<TextureAttributeLitObjectAttribValues>;
+  earthPicking: VertexAttribsInfo<PickingAttribValues>;
+  eclipticPlane: VertexAttribsInfo<CommonLitObjectAttribValues>;
+  line: VertexAttribsInfo<CommonSimpleObjectAttribValues>;
+  circle: VertexAttribsInfo<CommonSimpleObjectAttribValues>;
 };
 
 type SceneInfo = {
@@ -584,9 +663,7 @@ type CommonSceneObject = ObjectWithId & {
   show: boolean;
 };
 
-type SimpleVertexColorSceneObject = CommonSceneObject;
-
-type SimpleSceneObject = CommonSceneObject & {
+type UniformColorSceneObject = CommonSceneObject & {
   color: Vector4;
 };
 
@@ -594,8 +671,6 @@ type LitSceneObject = CommonSceneObject & {
   shininess: number;
 };
 
-type TexturedSceneObject = LitSceneObject;
-
-type ColoredSceneObject = LitSceneObject & {
+type UniformColorLitSceneObject = LitSceneObject & {
   color: Vector4;
 };

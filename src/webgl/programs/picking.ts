@@ -7,32 +7,31 @@ const flatValuePlaceholder = "FLAT_VALUE";
 
 const vertexShaderSrcTemplate = /*glsl*/ `#version 300 es
 in vec4 a_position;
-in vec4 a_value;
+in vec4 a_values;
 
 uniform mat4 u_matrix;
 
-flat out uint v_id;
-{{${flatValuePlaceholder}}} out vec4 v_value;
+{{${flatValuePlaceholder}}} out vec4 v_values;
 
 void main() {
   gl_Position = u_matrix * a_position;
-  v_value = a_value;
+  v_values = a_values;
 }
 `;
 
 const fragmentShaderSrc = /*glsl*/ `#version 300 es
 precision highp float;
 
-in vec4 v_value;
+in vec4 v_values;
 
 uniform uint u_id;
 
 layout(location=0) out uint outId;
-layout(location=1) out vec4 outValue;
+layout(location=1) out vec4 outValues;
 
 void main() {
   outId = u_id;
-  outValue = v_value;
+  outValues = v_values;
 }
 `;
 

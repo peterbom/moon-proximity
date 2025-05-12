@@ -1,5 +1,14 @@
-import { IndicesValue, SourceAttribInfo, SourceVertexInfo, VertexAttribsInfo } from "./attributes-types";
-import type { AttribName, AttribSetters, AttribValues, BufferAttribValue, BufferAttribValues } from "./program-types";
+import type {
+  AttribName,
+  AttribSetters,
+  AttribValues,
+  BufferAttribValue,
+  BufferAttribValues,
+  IndicesValue,
+  SourceAttribInfo,
+  SourceVertexInfo,
+  VertexAttribsInfo,
+} from "./program-types";
 
 export function createVertexAttribsInfo<T extends AttribValues>(
   gl: WebGL2RenderingContext,
