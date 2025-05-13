@@ -92,6 +92,7 @@ const timeStepMs = 1000 * 60;
 const lightColor = sunlightColor;
 const ambientToDirect = 0.4;
 const fov = degToRad(60);
+const eclipticPlaneSize = earthEquatorialRadius * 3;
 
 const viewInfo = {
   cameraDistance: (earthEquatorialRadius * 1.4) / Math.tan(fov / 2),
@@ -104,7 +105,7 @@ const viewInfo = {
 const earthShapeData = createEllipsoidShapeData(earthEquatorialRadius, earthPolarRadius);
 const straightLineShapeData = createStraightLineShapeData([1, 0, 0]);
 const circleShapeData = createCircleShapeData(1, 360);
-const eclipticPlaneShapeData = createPlaneShapeData(earthEquatorialRadius * 3, earthEquatorialRadius * 3);
+const eclipticPlaneShapeData = createPlaneShapeData(eclipticPlaneSize, eclipticPlaneSize);
 
 const coordDistanceDisplayHtml = `
 <div>lat: <span data-var="lat"></span>°</div>
@@ -226,6 +227,7 @@ function runWithDate(
     id: idGenerator.getNextId(),
     name: "Ecliptic plane",
     getTransforms: (sceneInfo) => [
+      asTranslation([-eclipticPlaneSize / 2, -eclipticPlaneSize / 2, 0]),
       ...sceneInfo.eclipticPlaneLocalWorldTransforms.localToWorldTransforms,
       asTranslation(sceneInfo.earthPosition),
     ],
