@@ -1,6 +1,11 @@
 import { Vector4 } from "../common/numeric-types";
 import type { RenderDimensions, ScreenRect } from "./dimension-types";
-import { TextureDefinition, TextureReadBufferInfo, TextureRenderProperties } from "./texture-definition";
+import {
+  InternalFormat,
+  TextureDefinition,
+  TextureReadBufferInfo,
+  TextureRenderProperties,
+} from "./texture-definition";
 
 export enum SizeType {
   FitToViewport,
@@ -57,8 +62,10 @@ export class FramebufferRenderTarget implements RenderTarget {
     return new FramebufferRenderTarget(gl, SizeType.FitToViewport, { width: 1, height: 1 });
   }
 
-  public withDepthTexture(): FramebufferRenderTarget {
-    this.depthTextureInfo = createTextureInfo(this.gl, new TextureDefinition("DEPTH_COMPONENT16"), 0, this.dimensions);
+  public withDepthTexture(
+    format: Extract<InternalFormat, "DEPTH_COMPONENT16" | "DEPTH_COMPONENT24">
+  ): FramebufferRenderTarget {
+    this.depthTextureInfo = createTextureInfo(this.gl, new TextureDefinition(format), 0, this.dimensions);
     this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.framebuffer);
     this.gl.framebufferTexture2D(
       this.gl.FRAMEBUFFER,

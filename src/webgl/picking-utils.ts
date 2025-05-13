@@ -12,7 +12,7 @@ export function createPickingRenderTarget(
   const idTextureDef = new TextureDefinition("R16UI");
   const valueTextureDef = new TextureDefinition(internalFormat);
   return FramebufferRenderTarget.createFitToViewport(gl)
-    .withDepthTexture()
+    .withDepthTexture("DEPTH_COMPONENT24")
     .withColorTexture(0, idTextureDef)
     .withColorTexture(1, valueTextureDef);
 }

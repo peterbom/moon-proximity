@@ -7,6 +7,18 @@ type PerObjectGetter<TValues extends UniformValues, TContext, TObject> = (
   obj: TObject
 ) => Partial<TValues>;
 
+export class UniformContext<TContext extends object = {}> {
+  private constructor(private readonly getContext: (rect: ScreenRect) => TContext) {}
+
+  public static create<TContext extends object>(getContext: (rect: ScreenRect) => TContext) {
+    return new UniformContext(getContext);
+  }
+
+  public createCollector<TValues extends UniformValues, TObject>() {
+    return UniformCollector.create<TValues, TContext, TObject>(this.getContext);
+  }
+}
+
 export class UniformCollector<
   TValues extends UniformValues,
   TSupplied extends UniformName<TValues> = never,

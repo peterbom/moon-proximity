@@ -196,11 +196,18 @@ function getOrCreateSingleControlElement(controlGroupElem: Element, label: strin
   return singleControlElement;
 }
 
-export function createAbsolutePositionCanvas(canvasPlacementElement: Element, position: StyleRect): HTMLCanvasElement {
+export function getOrCreateAbsolutePositionCanvas(
+  canvasPlacementElement: Element,
+  position: StyleRect
+): HTMLCanvasElement {
   const relativeContainerElem = getRelativeContainerOrError(canvasPlacementElement);
-  const canvasElem = document.createElement("canvas");
-  canvasElem.classList.add(absolute);
+  let canvasElem = relativeContainerElem.querySelector(`canvas.${absolute}`) as HTMLCanvasElement;
+  if (canvasElem === null) {
+    canvasElem = document.createElement("canvas");
+    canvasElem.classList.add(absolute);
+    relativeContainerElem.appendChild(canvasElem);
+  }
+
   setAbsoluteStyleRect(canvasElem, true, position);
-  relativeContainerElem.appendChild(canvasElem);
   return canvasElem;
 }

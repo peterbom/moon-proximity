@@ -56,6 +56,7 @@ export type VertexAttribsInfo<T extends AttribValues> = {
   mode: DrawMode;
   vao: WebGLVertexArrayObject;
   sourceData: SourceVertexInfo<T>;
+  clean: () => void;
 };
 
 export type IndicesValue = {

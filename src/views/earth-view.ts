@@ -5,8 +5,8 @@ import {
 } from "../calculations";
 import { Cleanup } from "../common/cleanup";
 import {
-  createAbsolutePositionCanvas,
   createTextOverlay,
+  getOrCreateAbsolutePositionCanvas,
   OverlayElement,
   setAbsoluteStyleRect,
   setupSlider,
@@ -81,7 +81,9 @@ import { SceneRenderer } from "../webgl/scene-renderer";
 import type { ObjectWithId } from "../webgl/scene-types";
 import { createCircleShapeData, createPlaneShapeData, createStraightLineShapeData } from "../webgl/shape-generation";
 import { createDownloadingTexture } from "../webgl/texture-utils";
-import { UniformCollector } from "../webgl/uniforms";
+import { UniformContext } from "../webgl/uniforms";
+
+const debugPicking = false;
 
 const idGenerator = new IdGenerator(1);
 const cleanup = new Cleanup();
@@ -104,20 +106,23 @@ const straightLineShapeData = createStraightLineShapeData([1, 0, 0]);
 const circleShapeData = createCircleShapeData(1, 360);
 const eclipticPlaneShapeData = createPlaneShapeData(earthEquatorialRadius * 3, earthEquatorialRadius * 3);
 
-const coordDisplayHtml = `
-<div>lat: <span data-var="lat"></span></div>
-<div>lon: <span data-var="lon"></span></div>
+const coordDistanceDisplayHtml = `
+<div>lat: <span data-var="lat"></span>°</div>
+<div>lon: <span data-var="lon"></span>°</div>
+<div>distance: +<span data-var="dist"></span>km</div>
 `;
 
-type CoordElems = {
+type CoordDistanceElems = {
   lat: Element;
   lon: Element;
+  dist: Element;
 };
 
-function getCoordElems(parent: Element): CoordElems {
+function getCoordDistanceElems(parent: Element): CoordDistanceElems {
   return {
     lat: parent.querySelector("span[data-var='lat']")!,
     lon: parent.querySelector("span[data-var='lon']")!,
+    dist: parent.querySelector("span[data-var='dist']")!,
   };
 }
 
@@ -152,7 +157,12 @@ export async function run(context: MultiViewContext, state: State) {
 
   const resources: ViewResources = {
     overlays: {
-      coords: createTextOverlay(context.virtualCanvas, coordDisplayHtml, getCoordElems, overlay),
+      coordsDistance: createTextOverlay(
+        context.virtualCanvas,
+        coordDistanceDisplayHtml,
+        getCoordDistanceElems,
+        overlay
+      ),
     },
     programs: {
       textureAttributeLitObjectProgramInfo,
@@ -348,14 +358,17 @@ function runWithDate(
       top: coords.canvasCssY,
     };
 
-    const coordsOverlay = viewResources.overlays.coords;
+    const coordsOverlay = viewResources.overlays.coordsDistance;
     const isEarthObject = result.id === earthObject.id;
-    setAbsoluteStyleRect(coordsOverlay.overlay, isEarthObject, styleRect);
+    const isProximityObject = result.id === proximityShapeObject.id;
 
-    if (isEarthObject) {
-      const [lon, lat] = result.values;
+    setAbsoluteStyleRect(coordsOverlay.overlay, isEarthObject || isProximityObject, styleRect);
+
+    if (isEarthObject || isProximityObject) {
+      const [lon, lat, distance] = result.values;
       coordsOverlay.content.lat.textContent = radToDeg(lat).toFixed(2);
       coordsOverlay.content.lon.textContent = radToDeg(lon).toFixed(2);
+      coordsOverlay.content.dist.textContent = isProximityObject ? distance.toFixed(2) : ` >${highlightClosestKmCount}`;
     }
   }
 
@@ -367,57 +380,79 @@ function runWithDate(
     proximityShapeData
   );
 
-  cleanup.add(proximityShapeVaoInfo);
+  const proximityPickingVaoInfo = createVertexAttribsInfo(
+    gl,
+    viewResources.programs.interpolatePickingProgramInfo.attribSetters,
+    {
+      attribsInfo: {
+        a_position: { type: gl.FLOAT, data: proximityShapeData.positions },
+        a_values: {
+          type: gl.FLOAT,
+          data: proximityShapeData.geodeticCoords.map((coord, i) => [
+            ...coord,
+            proximityShapeData.distancesAboveMin[i],
+          ]),
+        },
+      },
+      indices: earthShapeData.indices,
+    }
+  );
 
-  const earthUniformCollector = UniformCollector.create<
-    TextureAttributeLitObjectUniformValues,
-    SceneContext,
-    LitSceneObject
-  >((rect) => getSceneContext(sceneInfo, rect))
+  cleanup.add(proximityShapeVaoInfo);
+  cleanup.add(proximityPickingVaoInfo);
+
+  const uniformContext = UniformContext.create((rect) => getSceneContext(sceneInfo, rect));
+
+  const earthUniformCollector = uniformContext
+    .createCollector<TextureAttributeLitObjectUniformValues, LitSceneObject>()
     .withSceneUniforms(getCommonSharedLitSceneUniformValues)
     .withSceneUniform("u_texture", () => viewResources.earthTexture)
     .withObjectUniforms(getCommonLitObjectUniformValues);
 
-  const uniformColorLitObjectUniformCollector = UniformCollector.create<
-    UniformColorLitObjectUniformValues,
-    SceneContext,
-    UniformColorLitSceneObject
-  >((rect) => getSceneContext(sceneInfo, rect))
+  const uniformColorLitObjectUniformCollector = uniformContext
+    .createCollector<UniformColorLitObjectUniformValues, UniformColorLitSceneObject>()
     .withSceneUniforms(getCommonSharedLitSceneUniformValues)
     .withObjectUniforms(getCommonLitObjectUniformValues)
     .withObjectUniform("u_color", (_ctx, obj) => obj.color);
 
-  const colorAttributeSimpleObjectUniformCollector = UniformCollector.create<
-    ColorAttributeSimpleObjectUniformValues,
-    SceneContext,
-    CommonSceneObject
-  >((rect) => getSceneContext(sceneInfo, rect)).withObjectUniform("u_matrix", (context, obj) => {
-    const worldMatrix = getTransformSeriesMatrix(obj.getTransforms(context.sceneInfo));
-    return compose4(worldMatrix, context.viewProjectionMatrix);
-  });
+  const colorAttributeSimpleObjectUniformCollector = uniformContext
+    .createCollector<ColorAttributeSimpleObjectUniformValues, CommonSceneObject>()
+    .withObjectUniform("u_matrix", (context, obj) => {
+      const worldMatrix = getTransformSeriesMatrix(obj.getTransforms(context.sceneInfo));
+      return compose4(worldMatrix, context.viewProjectionMatrix);
+    });
 
-  const uniformColorSimpleObjectUniformCollector = UniformCollector.create<
-    UniformColorSimpleObjectUniformValues,
-    SceneContext,
-    UniformColorSceneObject
-  >((rect) => getSceneContext(sceneInfo, rect)).withObjectUniforms((context, obj) => {
-    const worldMatrix = getTransformSeriesMatrix(obj.getTransforms(context.sceneInfo));
-    const matrix = compose4(worldMatrix, context.viewProjectionMatrix);
-    return {
-      u_matrix: matrix,
-      u_color: obj.color,
-    };
-  });
+  const uniformColorSimpleObjectUniformCollector = uniformContext
+    .createCollector<UniformColorSimpleObjectUniformValues, UniformColorSceneObject>()
+    .withObjectUniforms((context, obj) => {
+      const worldMatrix = getTransformSeriesMatrix(obj.getTransforms(context.sceneInfo));
+      const matrix = compose4(worldMatrix, context.viewProjectionMatrix);
+      return {
+        u_matrix: matrix,
+        u_color: obj.color,
+      };
+    });
 
-  const earthPickingUniformCollector = UniformCollector.create<PickingUniformValues, SceneContext, LitSceneObject>(
-    (rect) => getSceneContext(sceneInfo, rect)
-  ).withObjectUniforms((context, obj) => {
-    const { u_matrix } = getCommonLitObjectUniformValues(context, obj);
-    return {
-      u_id: obj.id,
-      u_matrix,
-    };
-  });
+  const earthPickingUniformCollector = uniformContext
+    .createCollector<PickingUniformValues, LitSceneObject>()
+    .withObjectUniforms((context, obj) => {
+      const { u_matrix } = getCommonLitObjectUniformValues(context, obj);
+      return {
+        u_id: obj.id,
+        u_matrix,
+      };
+    });
+
+  const proximityPickingUniformCollector = uniformContext
+    .createCollector<PickingUniformValues, CommonSceneObject>()
+    .withObjectUniforms((context, obj) => {
+      const worldMatrix = getTransformSeriesMatrix(obj.getTransforms(context.sceneInfo));
+      const matrix = compose4(worldMatrix, context.viewProjectionMatrix);
+      return {
+        u_id: obj.id,
+        u_matrix: matrix,
+      };
+    });
 
   const screenRenderTarget = new ScreenRenderTarget(gl);
 
@@ -460,6 +495,15 @@ function runWithDate(
   );
 
   sceneRenderer.addSceneObjects(
+    [proximityShapeObject].filter((o) => o.show),
+    proximityPickingUniformCollector,
+    viewResources.programs.interpolatePickingProgramInfo,
+    proximityPickingVaoInfo,
+    viewResources.pickingRenderTarget,
+    DrawOptions.default()
+  );
+
+  sceneRenderer.addSceneObjects(
     lineObjects.filter((o) => o.show),
     uniformColorSimpleObjectUniformCollector,
     viewResources.programs.uniformColorSimpleObjectProgramInfo,
@@ -490,27 +534,30 @@ function runWithDate(
 
   context.multiSceneDrawer.registerStillDrawer(context.virtualCanvas, drawScene);
 
-  // TODO: REMOVE
-  const canvasElem = createAbsolutePositionCanvas(context.virtualCanvas, {
-    width: context.virtualCanvas.clientWidth,
-    height: context.virtualCanvas.clientHeight,
-    left: 0,
-    top: context.virtualCanvas.clientHeight + 5,
-  });
-
   function drawScene(pixelRect: ScreenRect) {
     sceneRenderer.render(pixelRect);
 
-    // TODO: REMOVE
-    const domain: [number, number] = [0, floatToUint16(Math.PI)];
-    const range: [number, number] = [0, 255];
-    const scale = makeScale(domain, range);
-    const adjust = (color: Vector4): Vector4 => {
-      const r = Math.abs(scale(color[0]));
-      const g = Math.abs(scale(color[1]));
-      return [r, g, 0, 255];
-    };
-    viewResources.pickingRenderTarget.drawToCanvas(canvasElem, 1, false, adjust);
+    if (debugPicking) {
+      const canvasElem = getOrCreateAbsolutePositionCanvas(context.virtualCanvas, {
+        width: context.virtualCanvas.clientWidth,
+        height: context.virtualCanvas.clientHeight,
+        left: 0,
+        top: context.virtualCanvas.clientHeight + 5,
+      });
+
+      const coordDomain: [number, number] = [floatToUint16(0), floatToUint16(Math.PI)];
+      const coordRange: [number, number] = [0, 255];
+      const coordScale = makeScale(coordDomain, coordRange);
+      const distanceScale = makeScale([floatToUint16(0), floatToUint16(10)], [0, 255]);
+      const adjust = (color: Vector4): Vector4 => {
+        const r = Math.abs(coordScale(color[0]));
+        const g = Math.abs(coordScale(color[1]));
+        const b = distanceScale(color[2]);
+        return [r, g, b, 255];
+      };
+
+      viewResources.pickingRenderTarget.drawToCanvas(canvasElem, 1, true, adjust);
+    }
   }
 }
 
@@ -616,7 +663,7 @@ type ViewResources = {
 };
 
 type Overlays = {
-  coords: OverlayElement<CoordElems>;
+  coordsDistance: OverlayElement<CoordDistanceElems>;
 };
 
 type Programs = {

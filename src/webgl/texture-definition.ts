@@ -82,6 +82,13 @@ const internalFormatValues = {
     type: WebGL2RenderingContext.UNSIGNED_SHORT,
     valuesPerPixel: 1,
   },
+  DEPTH_COMPONENT24: {
+    value: WebGL2RenderingContext.DEPTH_COMPONENT24,
+    arrayBufferCtor: Uint32Array,
+    format: WebGL2RenderingContext.DEPTH_COMPONENT,
+    type: WebGL2RenderingContext.UNSIGNED_INT,
+    valuesPerPixel: 1,
+  },
 } as const;
 
 export type InternalFormat = Extract<keyof typeof internalFormatValues, string>;
@@ -228,7 +235,7 @@ export class TextureDefinition {
   }
 }
 
-export type TextureReadBuffer = Uint8Array | Float32Array | Uint16Array;
+export type TextureReadBuffer = Uint8Array | Float32Array | Uint16Array | Uint32Array;
 
 export type TextureReadBufferInfo = {
   buffer: TextureReadBuffer;

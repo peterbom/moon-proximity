@@ -48,6 +48,7 @@ export function createVertexAttribsInfo<T extends AttribValues>(
     indicesValue,
     vao,
     sourceData: data,
+    clean: () => gl.deleteVertexArray(vao),
   };
 }
 
