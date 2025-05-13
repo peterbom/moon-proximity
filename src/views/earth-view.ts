@@ -13,7 +13,7 @@ import {
   StyleRect,
 } from "../common/html-utils";
 import { IdGenerator } from "../common/id-generator";
-import { clamp, degToRad, radToDeg } from "../common/math";
+import { clamp, degToRad, makeScale, radToDeg } from "../common/math";
 import { compose4, makeViewProjectionMatrices } from "../common/matrices";
 import type { SphericalCoordinate, Vector3, Vector4 } from "../common/numeric-types";
 import { normalize, scaleVector } from "../common/vectors";
@@ -42,6 +42,7 @@ import { createEllipsoidShapeData, createProximityShapeData } from "../geo-shape
 import type { LatLongPosition } from "../geo-types";
 import { getProximityLine } from "../proximity-line";
 import type { Perigee, State } from "../state-types";
+import { overlay } from "../styles/site.module.css";
 import { AstronomicalTime, getAstronomicalTime } from "../time";
 import { createVertexAttribsInfo } from "../webgl/attributes";
 import { addMouseListeners } from "../webgl/canvas-interaction";
@@ -49,6 +50,7 @@ import { MultiViewContext } from "../webgl/context";
 import type { CanvasCoordinates, ScreenRect } from "../webgl/dimension-types";
 import { addDragHandlers, DragData } from "../webgl/drag-interaction";
 import { DrawOptions } from "../webgl/draw-options";
+import { floatToUint16 } from "../webgl/format-conversion";
 import { createMouseMovePicking, createPickingRenderTarget, MousePickResult } from "../webgl/picking-utils";
 import { ProgramInfo, VertexAttribsInfo } from "../webgl/program-types";
 import {
@@ -150,7 +152,7 @@ export async function run(context: MultiViewContext, state: State) {
 
   const resources: ViewResources = {
     overlays: {
-      coords: createTextOverlay(context.virtualCanvas, coordDisplayHtml, getCoordElems),
+      coords: createTextOverlay(context.virtualCanvas, coordDisplayHtml, getCoordElems, overlay),
     },
     programs: {
       textureAttributeLitObjectProgramInfo,
@@ -500,7 +502,15 @@ function runWithDate(
     sceneRenderer.render(pixelRect);
 
     // TODO: REMOVE
-    viewResources.pickingRenderTarget.drawToCanvas(canvasElem, 1, false);
+    const domain: [number, number] = [0, floatToUint16(Math.PI)];
+    const range: [number, number] = [0, 255];
+    const scale = makeScale(domain, range);
+    const adjust = (color: Vector4): Vector4 => {
+      const r = Math.abs(scale(color[0]));
+      const g = Math.abs(scale(color[1]));
+      return [r, g, 0, 255];
+    };
+    viewResources.pickingRenderTarget.drawToCanvas(canvasElem, 1, false, adjust);
   }
 }
 

@@ -1,6 +1,7 @@
 import type { Vector4 } from "../common/numeric-types";
 import { addMouseListeners, MouseEventListeners } from "./canvas-interaction";
 import type { CanvasCoordinates, ScreenRect } from "./dimension-types";
+import { uint16ToFloat } from "./format-conversion";
 import { FramebufferRenderTarget } from "./render-target";
 import { InternalFormat, TextureDefinition } from "./texture-definition";
 
@@ -46,7 +47,12 @@ export function createMouseMovePicking(
       const valueData = pickingRenderTarget.readColorTexture(1, rect);
       const values: Vector4 = [0, 0, 0, 0];
       for (let i = 0; i < valueData.valuesPerPixel; i++) {
-        values[i] = valueData.buffer[i];
+        let componentValue = valueData.buffer[i];
+        if (valueData.type === WebGL2RenderingContext.HALF_FLOAT) {
+          componentValue = uint16ToFloat(componentValue);
+        }
+
+        values[i] = componentValue;
       }
 
       callback(coords, { id: idData.buffer[0], values });
