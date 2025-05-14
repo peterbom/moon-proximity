@@ -50,6 +50,30 @@ export class SceneRenderer {
     });
   }
 
+  public addSceneObject<TAttribValues extends AttribValues, TUniformValues extends UniformValues>(
+    uniformValues: TUniformValues,
+    programInfo: ProgramInfo<TAttribValues, TUniformValues>,
+    vaoInfo: VertexAttribsInfo<TAttribValues>,
+    renderTarget: RenderTarget,
+    drawOptions: DrawOptions
+  ) {
+    const renderer = this;
+    const sceneObject = {
+      setVao: () => renderer.setVao(vaoInfo),
+      setObjectUniforms: () => {},
+      drawVertices: () => drawVertices(renderer.gl, vaoInfo),
+    };
+
+    this.sceneObjectGroups.push({
+      sceneObjects: [sceneObject],
+      renderTarget,
+      drawOptions,
+      setProgram: () => renderer.setProgramInfo(programInfo),
+      setSceneContext: () => ({}),
+      setSceneUniforms: () => setUniforms(programInfo.uniformSetters, uniformValues),
+    });
+  }
+
   public addSceneObjects<
     TObj,
     TContext extends object,

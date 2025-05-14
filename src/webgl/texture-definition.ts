@@ -123,6 +123,7 @@ type TextureProperties = {
   internalFormat: InternalFormat;
   magFilter: MagFilter;
   minFilter: MinFilter;
+  createMipmap: boolean;
 };
 
 export class TextureDefinition {
@@ -133,6 +134,7 @@ export class TextureDefinition {
       internalFormat,
       minFilter: "LINEAR",
       magFilter: "LINEAR",
+      createMipmap: false,
     };
   }
 
@@ -157,6 +159,11 @@ export class TextureDefinition {
     return this;
   }
 
+  public withMipmap(createMipmap: boolean): TextureDefinition {
+    this.properties.createMipmap = createMipmap;
+    return this;
+  }
+
   public updateFromImage(gl: WebGL2RenderingContext, texture: WebGLTexture, image: TexImageSource) {
     const internalFormatValue = internalFormatValues[this.properties.internalFormat].value;
     const formatValue = internalFormatValues[this.properties.internalFormat].format;
@@ -164,6 +171,10 @@ export class TextureDefinition {
 
     gl.bindTexture(gl.TEXTURE_2D, texture);
     gl.texImage2D(gl.TEXTURE_2D, 0, internalFormatValue, formatValue, type, image);
+    if (this.properties.createMipmap) {
+      gl.generateMipmap(gl.TEXTURE_2D);
+    }
+
     gl.bindTexture(gl.TEXTURE_2D, null);
   }
 
@@ -192,9 +203,14 @@ export class TextureDefinition {
     const texture = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, texture);
     this.setParameters(gl);
-    gl.texStorage2D(gl.TEXTURE_2D, 1, internalFormatValue, dimensions.width, dimensions.height);
+    const mipmapLevelCount = this.getMipmapLevelCount(dimensions);
+    gl.texStorage2D(gl.TEXTURE_2D, mipmapLevelCount, internalFormatValue, dimensions.width, dimensions.height);
     gl.bindTexture(gl.TEXTURE_2D, null);
     return texture;
+  }
+
+  public getMipmapLevelCount(dimensions: RenderDimensions) {
+    return this.properties.createMipmap ? Math.floor(Math.log2(Math.min(dimensions.width, dimensions.height))) + 1 : 1;
   }
 
   public isFloat() {

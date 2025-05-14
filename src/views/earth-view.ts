@@ -64,7 +64,12 @@ import {
   TextureAttributeLitObjectUniformValues,
   UniformColorLitObjectUniformValues,
 } from "../webgl/programs/lit-object";
-import { createPickingProgramInfo, PickingAttribValues, PickingUniformValues } from "../webgl/programs/picking";
+import {
+  createPickingProgramInfo,
+  PickingAttribValues,
+  PickingOutputTextureInfos,
+  PickingUniformValues,
+} from "../webgl/programs/picking";
 import {
   ColorAttributeSimpleObjectAttribValues,
   ColorAttributeSimpleObjectUniformValues,
@@ -80,6 +85,7 @@ import { FramebufferRenderTarget, ScreenRenderTarget } from "../webgl/render-tar
 import { SceneRenderer } from "../webgl/scene-renderer";
 import type { ObjectWithId } from "../webgl/scene-types";
 import { createCircleShapeData, createPlaneShapeData, createStraightLineShapeData } from "../webgl/shape-generation";
+import { TextureDefinition } from "../webgl/texture-definition";
 import { createDownloadingTexture } from "../webgl/texture-utils";
 import { UniformContext } from "../webgl/uniforms";
 
@@ -101,6 +107,9 @@ const viewInfo = {
   nearLimit: 10,
   farLimit: 1e8,
 };
+
+const earthTexturePath = "/resources/2k_earth_daymap.jpg";
+const earthTextureDefinition = new TextureDefinition("RGB8").withMipmap(true);
 
 const earthShapeData = createEllipsoidShapeData(earthEquatorialRadius, earthPolarRadius);
 const straightLineShapeData = createStraightLineShapeData([1, 0, 0]);
@@ -173,7 +182,7 @@ export async function run(context: MultiViewContext, state: State) {
       uniformColorSimpleObjectProgramInfo,
     },
     vaos,
-    earthTexture: createDownloadingTexture(gl, "/resources/2k_earth_daymap.jpg", "RGB8", [0, 0, 255, 255]),
+    earthTexture: createDownloadingTexture(gl, earthTexturePath, earthTextureDefinition, [0, 0, 255, 255]),
     ephemeris,
     pickingRenderTarget: createPickingRenderTarget(gl, "RGBA16F"),
   };
@@ -558,7 +567,7 @@ function runWithDate(
         return [r, g, b, 255];
       };
 
-      viewResources.pickingRenderTarget.drawToCanvas(canvasElem, 1, true, adjust);
+      viewResources.pickingRenderTarget.drawToCanvas(canvasElem, "values", true, adjust);
     }
   }
 }
@@ -659,7 +668,7 @@ type ViewResources = {
   overlays: Overlays;
   programs: Programs;
   vaos: VaoInfos;
-  pickingRenderTarget: FramebufferRenderTarget;
+  pickingRenderTarget: FramebufferRenderTarget<PickingOutputTextureInfos>;
   earthTexture: WebGLTexture;
   ephemeris: Ephemeris;
 };

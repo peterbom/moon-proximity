@@ -2,19 +2,18 @@ import type { Vector4 } from "../common/numeric-types";
 import { addMouseListeners, MouseEventListeners } from "./canvas-interaction";
 import type { CanvasCoordinates, ScreenRect } from "./dimension-types";
 import { uint16ToFloat } from "./format-conversion";
+import { PickingOutputTextureInfos } from "./programs/picking";
 import { FramebufferRenderTarget } from "./render-target";
 import { InternalFormat, TextureDefinition } from "./texture-definition";
 
 export function createPickingRenderTarget(
   gl: WebGL2RenderingContext,
   internalFormat: InternalFormat
-): FramebufferRenderTarget {
-  const idTextureDef = new TextureDefinition("R16UI");
-  const valueTextureDef = new TextureDefinition(internalFormat);
-  return FramebufferRenderTarget.createFitToViewport(gl)
-    .withDepthTexture("DEPTH_COMPONENT24")
-    .withColorTexture(0, idTextureDef)
-    .withColorTexture(1, valueTextureDef);
+): FramebufferRenderTarget<PickingOutputTextureInfos> {
+  return FramebufferRenderTarget.createFitToViewport<PickingOutputTextureInfos>(gl, {
+    id: { attachmentIndex: 0, definition: new TextureDefinition("R16UI") },
+    values: { attachmentIndex: 1, definition: new TextureDefinition(internalFormat) },
+  }).withDepthTexture("DEPTH_COMPONENT24");
 }
 
 export type MousePickResult = { id: number; values: Vector4 };
@@ -27,7 +26,7 @@ export interface MouseMovePickingHandlers {
 export function createMouseMovePicking(
   combinedCanvas: HTMLCanvasElement,
   virtualCanvas: HTMLElement,
-  pickingRenderTarget: FramebufferRenderTarget,
+  pickingRenderTarget: FramebufferRenderTarget<PickingOutputTextureInfos>,
   callback: MousePickCallback
 ): MouseMovePickingHandlers {
   const listeners: MouseEventListeners = {
@@ -43,8 +42,8 @@ export function createMouseMovePicking(
         height: 1,
       };
 
-      const idData = pickingRenderTarget.readColorTexture(0, rect);
-      const valueData = pickingRenderTarget.readColorTexture(1, rect);
+      const idData = pickingRenderTarget.readColorTexture("id", rect);
+      const valueData = pickingRenderTarget.readColorTexture("values", rect);
       const values: Vector4 = [0, 0, 0, 0];
       for (let i = 0; i < valueData.valuesPerPixel; i++) {
         let componentValue = valueData.buffer[i];

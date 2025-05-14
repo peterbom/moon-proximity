@@ -6,11 +6,34 @@ import {
   TextureReadBufferInfo,
   TextureRenderProperties,
 } from "./texture-definition";
+import { readTexture } from "./texture-utils";
 
 export enum SizeType {
   FitToViewport,
   FixedSize,
 }
+
+export type ProgramOutputTextureInfo = {
+  attachmentIndex: number;
+  numComponents: number;
+};
+
+export type ProgramOutputTextureInfos = {
+  [name: string]: ProgramOutputTextureInfo;
+};
+
+export type TextureName<TTextures extends ProgramOutputTextureInfos> = Extract<keyof TTextures, string>;
+
+export type ProgramOutputTextureDefinitions<TTextures extends ProgramOutputTextureInfos> = {
+  [name in TextureName<TTextures>]: {
+    attachmentIndex: TTextures[name]["attachmentIndex"];
+    definition: TextureDefinition;
+  };
+};
+
+type ColorTextureInfos<TTextures extends ProgramOutputTextureInfos> = {
+  [name in TextureName<TTextures>]: TextureInfo;
+};
 
 export interface RenderTarget {
   get framebuffer(): WebGLFramebuffer | null;
@@ -37,61 +60,57 @@ export class ScreenRenderTarget implements RenderTarget {
   }
 }
 
-export class FramebufferRenderTarget implements RenderTarget {
-  public readonly framebuffer: WebGLFramebuffer;
+export class FramebufferRenderTarget<TTextures extends ProgramOutputTextureInfos> implements RenderTarget {
   private depthTextureInfo: TextureInfo | null = null;
-  private colorTextureInfos: TextureInfo[] = [];
 
   private constructor(
     private readonly gl: WebGL2RenderingContext,
+    public readonly framebuffer: WebGLFramebuffer,
     private readonly sizeType: SizeType,
+    private colorTextureInfos: ColorTextureInfos<TTextures>,
     private dimensions: RenderDimensions
-  ) {
-    this.framebuffer = gl.createFramebuffer();
-  }
+  ) {}
 
   public get textureDimensions(): RenderDimensions {
     return this.dimensions;
   }
 
-  public static createFixedSize(gl: WebGL2RenderingContext, dimensions: RenderDimensions): FramebufferRenderTarget {
-    return new FramebufferRenderTarget(gl, SizeType.FixedSize, dimensions);
+  public static createFixedSize<TColorTextures extends ProgramOutputTextureInfos>(
+    gl: WebGL2RenderingContext,
+    dimensions: RenderDimensions,
+    programOutputs: ProgramOutputTextureDefinitions<TColorTextures>
+  ): FramebufferRenderTarget<TColorTextures> {
+    return FramebufferRenderTarget.create(gl, SizeType.FixedSize, dimensions, programOutputs);
   }
 
-  public static createFitToViewport(gl: WebGL2RenderingContext): FramebufferRenderTarget {
-    return new FramebufferRenderTarget(gl, SizeType.FitToViewport, { width: 1, height: 1 });
+  public static createFitToViewport<TColorTextures extends ProgramOutputTextureInfos>(
+    gl: WebGL2RenderingContext,
+    programOutputs: ProgramOutputTextureDefinitions<TColorTextures>
+  ): FramebufferRenderTarget<TColorTextures> {
+    return FramebufferRenderTarget.create(gl, SizeType.FitToViewport, { width: 1, height: 1 }, programOutputs);
+  }
+
+  private static create<TColorTextures extends ProgramOutputTextureInfos>(
+    gl: WebGL2RenderingContext,
+    sizeType: SizeType,
+    dimensions: RenderDimensions,
+    programOutputs: ProgramOutputTextureDefinitions<TColorTextures>
+  ): FramebufferRenderTarget<TColorTextures> {
+    const framebuffer = gl.createFramebuffer();
+    const infoEntries = Object.entries(programOutputs).map(([name, output]) => {
+      const textureInfo = createColorTexture(gl, framebuffer, output.attachmentIndex, output.definition, dimensions);
+      return [name, textureInfo];
+    });
+
+    const colorTextureInfos = Object.fromEntries(infoEntries);
+    setDrawBuffers(gl, framebuffer, colorTextureInfos);
+    return new FramebufferRenderTarget(gl, framebuffer, sizeType, colorTextureInfos, dimensions);
   }
 
   public withDepthTexture(
     format: Extract<InternalFormat, "DEPTH_COMPONENT16" | "DEPTH_COMPONENT24">
-  ): FramebufferRenderTarget {
-    this.depthTextureInfo = createTextureInfo(this.gl, new TextureDefinition(format), 0, this.dimensions);
-    this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.framebuffer);
-    this.gl.framebufferTexture2D(
-      this.gl.FRAMEBUFFER,
-      this.gl.DEPTH_ATTACHMENT,
-      this.gl.TEXTURE_2D,
-      this.depthTextureInfo.texture,
-      0
-    );
-    return this;
-  }
-
-  public withColorTexture(index: number, definition: TextureDefinition): FramebufferRenderTarget {
-    const textureInfo = createTextureInfo(this.gl, definition, index, this.dimensions);
-    this.colorTextureInfos.push(textureInfo);
-    this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.framebuffer);
-    this.colorTextureInfos.forEach((info) => {
-      this.gl.framebufferTexture2D(
-        this.gl.FRAMEBUFFER,
-        this.gl.COLOR_ATTACHMENT0 + info.attachmentIndex,
-        this.gl.TEXTURE_2D,
-        info.texture,
-        0
-      );
-    });
-    this.gl.drawBuffers(this.colorTextureInfos.map((info) => this.gl.COLOR_ATTACHMENT0 + info.attachmentIndex));
-    this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
+  ): FramebufferRenderTarget<TTextures> {
+    this.depthTextureInfo = createDepthTexture(this.gl, this.framebuffer, format, this.dimensions);
     return this;
   }
 
@@ -112,7 +131,15 @@ export class FramebufferRenderTarget implements RenderTarget {
 
       this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.framebuffer);
       if (this.depthTextureInfo !== null) {
-        this.depthTextureInfo = createTextureInfo(this.gl, this.depthTextureInfo.definition, 0, dimensions);
+        const definition = this.depthTextureInfo.definition;
+        const texture = definition.createImmutable(this.gl, dimensions);
+        this.depthTextureInfo = {
+          definition,
+          texture,
+          attachmentIndex: this.depthTextureInfo.attachmentIndex,
+          renderProperties: this.depthTextureInfo.renderProperties,
+        };
+
         this.gl.framebufferTexture2D(
           this.gl.FRAMEBUFFER,
           this.gl.DEPTH_ATTACHMENT,
@@ -122,62 +149,38 @@ export class FramebufferRenderTarget implements RenderTarget {
         );
       }
 
-      const oldColorTextureInfos = this.colorTextureInfos;
-      this.colorTextureInfos = [];
-      oldColorTextureInfos.forEach((info) => {
-        const textureInfo = createTextureInfo(this.gl, info.definition, info.attachmentIndex, dimensions);
-        this.colorTextureInfos.push(textureInfo);
-        this.gl.framebufferTexture2D(
-          this.gl.FRAMEBUFFER,
-          this.gl.COLOR_ATTACHMENT0 + info.attachmentIndex,
-          this.gl.TEXTURE_2D,
-          textureInfo.texture,
-          0
+      const newColorTextureInfoEntries = Object.keys(this.colorTextureInfos).map((name) => {
+        const oldTextureInfo = this.colorTextureInfos[name];
+        const newTextureInfo = createColorTexture(
+          this.gl,
+          this.framebuffer,
+          oldTextureInfo.attachmentIndex,
+          oldTextureInfo.definition,
+          dimensions
         );
+
+        return [name, newTextureInfo];
       });
 
-      this.gl.drawBuffers(this.colorTextureInfos.map((info) => this.gl.COLOR_ATTACHMENT0 + info.attachmentIndex));
-      this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
+      this.colorTextureInfos = Object.fromEntries(newColorTextureInfoEntries);
+      setDrawBuffers(this.gl, this.framebuffer, this.colorTextureInfos);
     }
   }
 
-  public readColorTexture(attachmentIndex: number, rect: ScreenRect): TextureReadBufferInfo {
-    const textureInfo = this.colorTextureInfos.find((info) => info.attachmentIndex === attachmentIndex);
-    if (!textureInfo) {
-      throw new Error(`Texture with attachment index ${attachmentIndex} not found`);
-    }
-
+  public readColorTexture(name: TextureName<TTextures>, rect: ScreenRect): TextureReadBufferInfo {
+    const textureInfo = this.colorTextureInfos[name];
     this.checkFramebufferStatus(true);
 
-    const readBufferInfo = textureInfo.definition.createReadBuffer(rect);
-    this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.framebuffer);
-    this.gl.readBuffer(this.gl.COLOR_ATTACHMENT0 + textureInfo.attachmentIndex);
-
-    const requiredFormat = this.gl.getParameter(this.gl.IMPLEMENTATION_COLOR_READ_FORMAT);
-    if (requiredFormat !== readBufferInfo.format) {
-      throw new Error(
-        `${textureInfo.renderProperties.internalFormat}: Has format ${readBufferInfo.format} but requires ${requiredFormat}`
-      );
-    }
-
-    const requiredType = this.gl.getParameter(this.gl.IMPLEMENTATION_COLOR_READ_TYPE);
-    if (requiredType !== readBufferInfo.type) {
-      throw new Error(
-        `${textureInfo.renderProperties.internalFormat}: Has type ${readBufferInfo.type} but requires ${requiredType}`
-      );
-    }
-
-    this.gl.readPixels(
-      rect.xOffset,
-      rect.yOffset,
-      rect.width,
-      rect.height,
-      readBufferInfo.format,
-      readBufferInfo.type,
-      readBufferInfo.buffer
+    return readTexture(
+      this.gl,
+      {
+        framebuffer: this.framebuffer,
+        attachmentIndex: textureInfo.attachmentIndex,
+        texture: textureInfo.texture,
+        textureDefinition: textureInfo.definition,
+      },
+      rect
     );
-    this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
-    return readBufferInfo;
   }
 
   public checkFramebufferStatus(throwIfNotComplete: boolean): boolean {
@@ -192,12 +195,8 @@ export class FramebufferRenderTarget implements RenderTarget {
     return isComplete;
   }
 
-  public getColorTextureInfo(attachmentIndex: number): TextureInfo {
-    const textureInfo = this.colorTextureInfos.find((t) => t.attachmentIndex === attachmentIndex);
-    if (!textureInfo) {
-      throw new Error(`No texture found for attachment index ${attachmentIndex}`);
-    }
-
+  public getColorTextureInfo(name: TextureName<TTextures>): TextureInfo {
+    const textureInfo = this.colorTextureInfos[name];
     return textureInfo;
   }
 
@@ -209,7 +208,7 @@ export class FramebufferRenderTarget implements RenderTarget {
       this.gl.clearBufferfv(this.gl.DEPTH, 0, [1]);
     }
 
-    this.colorTextureInfos.forEach((info) => {
+    Object.values(this.colorTextureInfos).forEach((info) => {
       if (info.definition.isFloat()) {
         this.gl.clearBufferfv(this.gl.COLOR, info.attachmentIndex, [0, 0, 0, 0]);
       } else if (info.definition.isInt()) {
@@ -227,12 +226,12 @@ export class FramebufferRenderTarget implements RenderTarget {
 
   public drawToCanvas(
     canvasElem: HTMLCanvasElement,
-    attachmentIndex: number,
+    textureName: TextureName<TTextures>,
     flipY: boolean,
     adjustment: (inputColor: Vector4) => Vector4 = ([r, g, b]) => [r, g, b, 255]
   ) {
     const { width, height } = this.dimensions;
-    const readInfo = this.readColorTexture(attachmentIndex, { xOffset: 0, yOffset: 0, width, height });
+    const readInfo = this.readColorTexture(textureName, { xOffset: 0, yOffset: 0, width, height });
 
     const writePixelValueCount = 4; // RGBA
     const writeRowValueCount = width * writePixelValueCount;
@@ -279,7 +278,7 @@ export class FramebufferRenderTarget implements RenderTarget {
       this.gl.deleteTexture(this.depthTextureInfo.texture);
     }
 
-    this.colorTextureInfos.forEach((info) => this.gl.deleteTexture(info.texture));
+    Object.values(this.colorTextureInfos).forEach((info) => this.gl.deleteTexture(info.texture));
     this.gl.deleteFramebuffer(this.framebuffer);
   }
 }
@@ -291,16 +290,62 @@ export type TextureInfo = {
   renderProperties: TextureRenderProperties;
 };
 
-function createTextureInfo(
+function createDepthTexture(
   gl: WebGL2RenderingContext,
-  definition: TextureDefinition,
-  attachmentIndex: number,
+  framebuffer: WebGLFramebuffer,
+  format: Extract<InternalFormat, "DEPTH_COMPONENT16" | "DEPTH_COMPONENT24">,
   dimensions: RenderDimensions
 ): TextureInfo {
-  return {
+  const definition = new TextureDefinition(format);
+  const texture = definition.createImmutable(gl, dimensions);
+  const textureInfo: TextureInfo = {
+    definition,
+    texture,
+    attachmentIndex: 0,
+    renderProperties: definition.getRenderProperties(),
+  };
+
+  gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, texture, 0);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+  return textureInfo;
+}
+
+function createColorTexture(
+  gl: WebGL2RenderingContext,
+  framebuffer: WebGLFramebuffer,
+  attachmentIndex: number,
+  definition: TextureDefinition,
+  dimensions: RenderDimensions
+): TextureInfo {
+  const textureInfo: TextureInfo = {
     definition,
     texture: definition.createImmutable(gl, dimensions),
     attachmentIndex,
     renderProperties: definition.getRenderProperties(),
   };
+
+  gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+  gl.framebufferTexture2D(
+    gl.FRAMEBUFFER,
+    gl.COLOR_ATTACHMENT0 + attachmentIndex,
+    gl.TEXTURE_2D,
+    textureInfo.texture,
+    0
+  );
+
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  return textureInfo;
+}
+
+function setDrawBuffers<TTextures extends ProgramOutputTextureInfos>(
+  gl: WebGL2RenderingContext,
+  framebuffer: WebGLFramebuffer,
+  infos: ColorTextureInfos<TTextures>
+) {
+  const buffers = Object.values(infos).map((info) => gl.COLOR_ATTACHMENT0 + info.attachmentIndex);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+  gl.drawBuffers(buffers);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 }
