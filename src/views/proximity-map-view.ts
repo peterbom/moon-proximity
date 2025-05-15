@@ -168,8 +168,7 @@ async function runWithNewSelection(context: MultiViewContext, resources: NewSele
   }
 
   const proximityShapeData = resources.proximityShapeData;
-  const structuredTileProcessors = await resources.tileCollection.createStructuredTileProcessors(proximityShapeData);
-  const terrainData = new ProximityTerrainData(structuredTileProcessors);
+  const terrainData = await resources.tileCollection.createTerrainData(proximityShapeData);
 
   cleanup.add(terrainData);
 
@@ -299,28 +298,23 @@ function runWithReadyResources(context: MultiViewContext, resources: ReadyResour
       const dataTexCoords: Vector2 = [x, y];
 
       const tileIndex = Math.floor(z); // TODO: Change picking so this is not interpolated.
-      const tile = resources.terrainData.structuredTileProcessors.orderedTiles[tileIndex];
-      const processors = resources.terrainData.structuredTileProcessors.tileProcessorLookup.get(tile);
-      if (!processors) {
-        throw new Error(`No processor found for tile ${tile.index} (${tile.filenameBase})`);
-      }
 
-      const { lat, long } = processors.elevation.getLatLong(dataTexCoords);
+      const { lat, long } = resources.terrainData.getLatLong(tileIndex, dataTexCoords);
       resources.overlays.terrain.content.lat.textContent = radToDeg(lat).toFixed(2);
       resources.overlays.terrain.content.lon.textContent = radToDeg(long).toFixed(2);
 
-      const elev = processors.elevation.getElevation(dataTexCoords);
+      const elev = resources.terrainData.getElevation(tileIndex, dataTexCoords);
       resources.overlays.terrain.content.elev.textContent = elev.toFixed();
 
       // When displaying the overall distance, take elevation data into account (converting from m to km).
-      const distanceAboveMin = processors.elevation.getDistanceAboveMin(dataTexCoords) - elev / 1000;
+      const distanceAboveMin = resources.terrainData.getDistanceAboveMin(tileIndex, dataTexCoords) - elev / 1000;
       const distance = resources.proximityShapeData.minDistance + distanceAboveMin;
       resources.overlays.terrain.content.dist.textContent = Math.round(distance).toLocaleString();
 
       const deltaSign = Math.sign(distanceAboveMin) >= 0 ? "+" : "-";
       resources.overlays.terrain.content.deltaDist.textContent = `${deltaSign}${Math.abs(distanceAboveMin).toFixed(2)}`;
 
-      const unixSeconds = processors.elevation.getUnixSeconds(dataTexCoords);
+      const unixSeconds = resources.terrainData.getUnixSeconds(tileIndex, dataTexCoords);
       resources.overlays.terrain.content.time.textContent = new Date(unixSeconds * 1000).toISOString();
     } else if (pinObject !== undefined) {
       resources.overlays.pin.content.rank.textContent = pinObject.rank.toFixed();

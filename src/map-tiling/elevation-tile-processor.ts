@@ -1,4 +1,5 @@
 import type { Vector2 } from "../common/numeric-types";
+import { elevationScaleFactor } from "../constants";
 import { ProximityShapeData } from "../geo-shape-data";
 import { MultiViewContext } from "../webgl/context";
 import type { ScreenRect } from "../webgl/dimension-types";
@@ -16,39 +17,29 @@ import {
 import { FramebufferRenderTarget } from "../webgl/render-target";
 import { SceneRenderer } from "../webgl/scene-renderer";
 import { TextureDefinition } from "../webgl/texture-definition";
-import { ReadableTexture, readTexture } from "../webgl/texture-utils";
-import {
-  elevationFileOriginalDimensions,
-  getTileDimensions,
-  latitudeRadiansPerTile,
-  longitudeRadiansPerTile,
-} from "./earth-resource-tiles";
-import type { EarthResourceTile, ProximityTilePrograms, TileProximityValues } from "./tile-types";
-
-const elevationTileDimensions = getTileDimensions(elevationFileOriginalDimensions);
-const elevationTilePixelRect: ScreenRect = {
-  xOffset: 0,
-  yOffset: 0,
-  width: elevationTileDimensions.width,
-  height: elevationTileDimensions.height,
-};
-
-// https://visibleearth.nasa.gov/images/73934/topography
-// "Data in these images were scaled 0-6400 meters"
-const elevationScaleFactor = 6400.0;
+import { createReadableTexture, ReadableTexture } from "../webgl/texture-utils";
+import { latitudeRadiansPerTile, longitudeRadiansPerTile } from "./earth-resource-tiles";
+import type { EarthResourceTile, ElevationTilePrograms, ImageDimensions } from "./tile-types";
 
 export class ElevationTileProcessor {
   private readonly renderTargets: TileTerrainRenderTargets;
-  private elevationTexture: ReadableTexture | null = null;
+  private readonly targetPixelRect: ScreenRect;
 
   constructor(
     private readonly context: MultiViewContext,
-    private readonly programs: ProximityTilePrograms,
+    private readonly programs: ElevationTilePrograms,
     private readonly tile: EarthResourceTile,
-    private readonly proximityShapeData: ProximityShapeData
+    private readonly proximityShapeData: ProximityShapeData,
+    tileDimensions: ImageDimensions
   ) {
     const gl = context.gl;
-    this.renderTargets = createTileTerrainRenderTargets(gl);
+    this.targetPixelRect = {
+      xOffset: 0,
+      yOffset: 0,
+      width: tileDimensions.width,
+      height: tileDimensions.height,
+    };
+    this.renderTargets = createTileTerrainRenderTargets(gl, this.targetPixelRect);
   }
 
   public updateProximityHeightMapTexture() {
@@ -76,18 +67,10 @@ export class ElevationTileProcessor {
       DrawOptions.default().depthTest(false).depthMask(false).cullFace(false)
     );
 
-    sceneRenderer.render(elevationTilePixelRect);
+    sceneRenderer.render(this.targetPixelRect);
   }
 
-  public setElevationTexture(texture: ReadableTexture) {
-    this.elevationTexture = texture;
-  }
-
-  public combineProximityAndElevation() {
-    if (this.elevationTexture === null) {
-      throw new Error("Elevation texture must be set before combining with proximity data.");
-    }
-
+  public combineProximityAndElevation(elevationTexture: WebGLTexture) {
     const gl = this.context.gl;
 
     const combineHeightDistanceVao = createCombineHeightDistanceVao(
@@ -98,7 +81,7 @@ export class ElevationTileProcessor {
     const uniformValues: CombineHeightDistanceUniformValues = {
       u_distanceAboveMinTexture:
         this.renderTargets.proximityHeightMapRenderTarget.getColorTextureInfo("distanceAboveMin").texture,
-      u_elevationTexture: this.elevationTexture,
+      u_elevationTexture: elevationTexture,
       u_elevationScaleFactor: elevationScaleFactor,
     };
 
@@ -111,62 +94,32 @@ export class ElevationTileProcessor {
       DrawOptions.default().depthTest(false).depthMask(false).cullFace(false)
     );
 
-    sceneRenderer.render(elevationTilePixelRect);
+    sceneRenderer.render(this.targetPixelRect);
   }
 
-  public getProximityValues(): TileProximityValues {
-    const { width, height } = elevationTileDimensions;
-    const rect: ScreenRect = { xOffset: 0, yOffset: 0, width, height };
-
-    const bufferInfo = this.renderTargets.combineHeightRenderTarget.readColorTexture("proximity", rect);
-    const data = bufferInfo.buffer as Float32Array; // TODO: Pull type from texture definition?
-
-    return { data, width, height };
+  public createProximityReadableTexture(): ReadableTexture {
+    const textureInfo = this.renderTargets.combineHeightRenderTarget.getColorTextureInfo("proximity");
+    return createReadableTexture(this.context.gl, textureInfo.definition, textureInfo.texture);
   }
 
-  public getElevation(dataTexCoords: Vector2): number {
-    if (this.elevationTexture === null) {
-      throw new Error("Elevation texture must be set before reading it.");
-    }
-
-    const [x, y] = dataTexCoords;
-    const rect: ScreenRect = { xOffset: x, yOffset: y, width: 1, height: 1 };
-
-    const bufferInfo = readTexture(this.context.gl, this.elevationTexture, rect);
-
-    return (bufferInfo.buffer[0] / 255) * elevationScaleFactor;
+  public createDistanceAboveMinReadableTexture(): ReadableTexture {
+    const textureInfo = this.renderTargets.proximityHeightMapRenderTarget.getColorTextureInfo("distanceAboveMin");
+    return createReadableTexture(this.context.gl, textureInfo.definition, textureInfo.texture);
   }
 
-  public getLatLong(dataTexCoords: Vector2): { long: number; lat: number } {
-    const [x, y] = dataTexCoords;
-    const long = this.tile.startLon + (x / elevationTileDimensions.width) * longitudeRadiansPerTile;
-    const lat = this.tile.startLat - (y / elevationTileDimensions.height) * latitudeRadiansPerTile;
-    return { long, lat };
-  }
-
-  public getDistanceAboveMin(dataTexCoords: Vector2): number {
-    const [x, y] = dataTexCoords;
-    const rect: ScreenRect = { xOffset: x, yOffset: y, width: 1, height: 1 };
-
-    const bufferInfo = this.renderTargets.proximityHeightMapRenderTarget.readColorTexture("distanceAboveMin", rect);
-
-    return bufferInfo.buffer[0];
-  }
-
-  public getUnixSeconds(dataTexCoords: Vector2): number {
-    const [x, y] = dataTexCoords;
-    const rect: ScreenRect = { xOffset: x, yOffset: y, width: 1, height: 1 };
-
-    const bufferInfo = this.renderTargets.proximityHeightMapRenderTarget.readColorTexture("unixSeconds", rect);
-
-    return bufferInfo.buffer[0];
+  public createUnixSecondsReadableTexture(): ReadableTexture {
+    const textureInfo = this.renderTargets.proximityHeightMapRenderTarget.getColorTextureInfo("unixSeconds");
+    return createReadableTexture(this.context.gl, textureInfo.definition, textureInfo.texture);
   }
 }
 
-function createTileTerrainRenderTargets(gl: WebGL2RenderingContext): TileTerrainRenderTargets {
+function createTileTerrainRenderTargets(
+  gl: WebGL2RenderingContext,
+  targetPixelRect: ScreenRect
+): TileTerrainRenderTargets {
   const proximityHeightMapRenderTarget = FramebufferRenderTarget.createFixedSize<ProximityHeightMapOutputTextureInfos>(
     gl,
-    elevationTileDimensions,
+    targetPixelRect,
     {
       distanceAboveMin: {
         attachmentIndex: 0,
@@ -181,7 +134,7 @@ function createTileTerrainRenderTargets(gl: WebGL2RenderingContext): TileTerrain
 
   const combineHeightRenderTarget = FramebufferRenderTarget.createFixedSize<CombineHeightOutputTextureInfos>(
     gl,
-    elevationTileDimensions,
+    targetPixelRect,
     {
       proximity: {
         attachmentIndex: 0,

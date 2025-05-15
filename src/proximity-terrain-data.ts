@@ -1,6 +1,6 @@
 import { maxByProperty } from "./common/iteration";
 import type { Vector2 } from "./common/numeric-types";
-import { highlightClosestKmCount } from "./constants";
+import { elevationScaleFactor, highlightClosestKmCount } from "./constants";
 import { createTerrainShapeData, TerrainShapeData } from "./geo-shape-data";
 import {
   elevationFileOriginalDimensions,
@@ -8,7 +8,21 @@ import {
   latitudeRadiansPerTile,
   longitudeRadiansPerTile,
 } from "./map-tiling/earth-resource-tiles";
-import type { EarthResourceTile, StructuredTileProcessors, TileProximityValues } from "./map-tiling/tile-types";
+import type {
+  EarthResourceTile,
+  ImageDimensions,
+  TileOutputTextures,
+  TileToTextureScale,
+} from "./map-tiling/tile-types";
+import { TiledTextureDimensions } from "./map-tiling/tiled-texture-dimensions";
+import { ScreenRect } from "./webgl/dimension-types";
+import { ReadableTexture, readTexture } from "./webgl/texture-utils";
+
+export type TerrainTileDimensions = {
+  colorTiledTextureDimensions: TiledTextureDimensions;
+  colorTileDimensions: ImageDimensions;
+  elevationTileDimensions: ImageDimensions;
+};
 
 export type TerrainLongitudeLine = {
   x: number;
@@ -34,11 +48,49 @@ const cachedTopCount = 100;
 const meshPointSpacing = 5;
 
 export class ProximityTerrainData {
+  private readonly orderedTiles: EarthResourceTile[];
   private readonly longitudeLines: TerrainLongitudeLine[];
+
+  private readonly tileToColorTextureScaling = new Map<EarthResourceTile, TileToTextureScale>();
+  private readonly elevationTextures = new Map<EarthResourceTile, ReadableTexture>();
+  private readonly distancesAboveMinTextures = new Map<EarthResourceTile, ReadableTexture>();
+  private readonly unixSecondsTextures = new Map<EarthResourceTile, ReadableTexture>();
+
+  private readonly colorTiledTextureDimensions: TiledTextureDimensions;
+  private readonly colorTileDimensions: ImageDimensions;
+  private readonly elevationTileDimensions: ImageDimensions;
+
   private readonly cachedTopLocations: TerrainLocation[];
 
-  constructor(private readonly structuredTileProcessors: StructuredTileProcessors) {
-    this.longitudeLines = getLongitudeLines(structuredTileProcessors);
+  constructor(
+    private readonly gl: WebGL2RenderingContext,
+    private readonly groupedOrderedTiles: EarthResourceTile[][],
+    tileOutputTextures: Map<EarthResourceTile, TileOutputTextures>,
+    private readonly colorTexture: ReadableTexture,
+    private readonly terrainTileDimensions: TerrainTileDimensions
+  ) {
+    this.orderedTiles = groupedOrderedTiles.flat();
+
+    this.colorTiledTextureDimensions = terrainTileDimensions.colorTiledTextureDimensions;
+    this.colorTileDimensions = terrainTileDimensions.colorTileDimensions;
+    this.elevationTileDimensions = terrainTileDimensions.elevationTileDimensions;
+
+    const proximityTextures = new Map<EarthResourceTile, ReadableTexture>();
+    tileOutputTextures.forEach((textures, tile) => {
+      const textureScaling = terrainTileDimensions.colorTiledTextureDimensions.getTileToTextureScale(tile);
+      proximityTextures.set(tile, textures.proximities);
+      this.tileToColorTextureScaling.set(tile, textureScaling);
+      this.elevationTextures.set(tile, textures.elevations);
+      this.distancesAboveMinTextures.set(tile, textures.distancesAboveMin);
+      this.unixSecondsTextures.set(tile, textures.unixSeconds);
+    });
+
+    this.longitudeLines = getLongitudeLines(gl, groupedOrderedTiles, proximityTextures);
+
+    // Having used the proximity textures to calculate the longitude lines, they're no longer
+    // required.
+    proximityTextures.forEach((texture) => gl.deleteTexture(texture));
+
     this.cachedTopLocations = this.calculateTopClosestPoints(cachedTopCount);
   }
 
@@ -51,20 +103,14 @@ export class ProximityTerrainData {
   }
 
   public createShapeData(): TerrainShapeData {
-    const orderedTiles = this.structuredTileProcessors.orderedTiles;
-    const processorLookup = this.structuredTileProcessors.tileProcessorLookup;
-
     // Create the shape data from a subset of the height map data for mesh generation.
     const linesForMesh = this.getLinesForMesh();
-    return createTerrainShapeData(linesForMesh, (t) => orderedTiles.indexOf(t), getTexCoords);
+    const tileTextureScaling = this.tileToColorTextureScaling;
+    return createTerrainShapeData(linesForMesh, (t) => this.orderedTiles.indexOf(t), getTexCoords);
 
     function getTexCoords(tile: EarthResourceTile, tileX: number, tileY: number): Vector2 {
-      const processors = processorLookup.get(tile);
-      if (!processors) {
-        throw new Error(`Unable to find texture processor for tile ${tile.index} (${tile.filenameBase})`);
-      }
-
-      return processors.color.getTextureCoords(tileX, tileY);
+      const scaling = tileTextureScaling.get(tile)!;
+      return [scaling.scaleX(tileX), scaling.scaleY(tileY)];
     }
   }
 
@@ -129,29 +175,93 @@ export class ProximityTerrainData {
 
     return topClosestPoints.sort((a, b) => b.proximity - a.proximity);
   }
+
+  public getLatLong(tileIndex: number, dataTexCoords: Vector2): { long: number; lat: number } {
+    const tile = this.orderedTiles[tileIndex];
+
+    const [x, y] = dataTexCoords;
+    const long = tile.startLon + (x / this.elevationTileDimensions.width) * longitudeRadiansPerTile;
+    const lat = tile.startLat - (y / this.elevationTileDimensions.height) * latitudeRadiansPerTile;
+    return { long, lat };
+  }
+
+  public getElevation(tileIndex: number, dataTexCoords: Vector2): number {
+    const tile = this.orderedTiles[tileIndex];
+    const texture = this.elevationTextures.get(tile)!;
+
+    const [x, y] = dataTexCoords;
+    const rect: ScreenRect = { xOffset: x, yOffset: y, width: 1, height: 1 };
+
+    const bufferInfo = readTexture(this.gl, texture, rect);
+
+    return (bufferInfo.buffer[0] / 255) * elevationScaleFactor;
+  }
+
+  public getDistanceAboveMin(tileIndex: number, dataTexCoords: Vector2): number {
+    const tile = this.orderedTiles[tileIndex];
+    const texture = this.distancesAboveMinTextures.get(tile)!;
+
+    const [x, y] = dataTexCoords;
+    const rect: ScreenRect = { xOffset: x, yOffset: y, width: 1, height: 1 };
+
+    const bufferInfo = readTexture(this.gl, texture, rect);
+
+    return bufferInfo.buffer[0];
+  }
+
+  public getUnixSeconds(tileIndex: number, dataTexCoords: Vector2): number {
+    const tile = this.orderedTiles[tileIndex];
+    const texture = this.unixSecondsTextures.get(tile)!;
+
+    const [x, y] = dataTexCoords;
+    const rect: ScreenRect = { xOffset: x, yOffset: y, width: 1, height: 1 };
+
+    const bufferInfo = readTexture(this.gl, texture, rect);
+
+    return bufferInfo.buffer[0];
+  }
+
+  public clean() {
+    this.elevationTextures.forEach((texture) => this.gl.deleteTexture(texture.texture));
+    this.distancesAboveMinTextures.forEach((texture) => this.gl.deleteTexture(texture.texture));
+    this.unixSecondsTextures.forEach((texture) => this.gl.deleteTexture(texture.texture));
+  }
 }
 
-function getLongitudeLines(structuredTileProcessors: StructuredTileProcessors): TerrainLongitudeLine[] {
+function getLongitudeLines(
+  gl: WebGL2RenderingContext,
+  groupedOrderedTiles: EarthResourceTile[][],
+  tileProximityTextures: Map<EarthResourceTile, ReadableTexture>
+): TerrainLongitudeLine[] {
   const lines: TerrainLongitudeLine[] = [];
 
   const elevationTileDimensions = getTileDimensions(elevationFileOriginalDimensions);
   const latitudeRadiansPerPixel = latitudeRadiansPerTile / elevationTileDimensions.height;
   const longitudeRadiansPerPixel = longitudeRadiansPerTile / elevationTileDimensions.width;
 
-  // Divide into strips of equal longitude, West to East
-  for (const longitudeProcessors of structuredTileProcessors.longitudeTileProcessors) {
+  const elevationTileRect: ScreenRect = {
+    xOffset: 0,
+    yOffset: 0,
+    width: elevationTileDimensions.width,
+    height: elevationTileDimensions.height,
+  };
+
+  // Divide into pixel-wide strips of equal longitude, West to East
+  for (const tileGroup of groupedOrderedTiles) {
     // Get all the proximity values for all the tiles at this longitude.
-    const valuesForLongitude: SourceLongitudeValues[] = longitudeProcessors.singleTileProcessors.map((p) => ({
-      values: p.elevation.getProximityValues(),
-      tile: p.tile,
-    }));
+    const valuesForLongitude: SourceLongitudeValues[] = tileGroup.map((tile) => {
+      const proximityTexture = tileProximityTextures.get(tile)!;
+      const bufferInfo = readTexture(gl, proximityTexture, elevationTileRect);
+      const data = bufferInfo.buffer as Float32Array; // TODO: Pull type from texture definition?
+      return { tile, data, width: elevationTileRect.width, height: elevationTileDimensions.height };
+    });
 
     for (let x = 0; x < elevationTileDimensions.width; x++) {
       // Create a column of values by combining the x'th column from each of the tiles at this
       // longitude in order (downwards / South / descending latitude).
-      const startLatitude = longitudeProcessors.singleTileProcessors[0].tile.startLat;
+      const startLatitude = tileGroup[0].startLat;
       const points = [...makeColumnIterator(valuesForLongitude, startLatitude, latitudeRadiansPerPixel, x)];
-      const longitude = longitudeProcessors.startLon + longitudeRadiansPerPixel * x;
+      const longitude = tileGroup[0].startLon + longitudeRadiansPerPixel * x;
       if (points.length >= 2) {
         lines.push({ longitude, points, x });
       }
@@ -174,9 +284,9 @@ function* makeColumnIterator(
 
   for (const tileValues of valuesForLongitude) {
     const tile = tileValues.tile;
-    for (let y = 0; y < tileValues.values.height; y++) {
-      const index = y * tileValues.values.width + x;
-      const value = tileValues.values.data[index];
+    for (let y = 0; y < tileValues.height; y++) {
+      const index = y * tileValues.width + x;
+      const value = tileValues.data[index];
       if (value > includeThreshold) {
         inRangeStarted = true;
         yield { latitude, value, tile, y };
@@ -194,5 +304,7 @@ function* makeColumnIterator(
 
 type SourceLongitudeValues = {
   tile: EarthResourceTile;
-  values: TileProximityValues;
+  data: Float32Array;
+  width: number;
+  height: number;
 };

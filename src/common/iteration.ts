@@ -6,6 +6,34 @@ export function seqStep(from: number, to: number, step: number): number[] {
   return seq(Math.floor((to - from) / step) + 1).map((n) => n * step + from);
 }
 
+/**
+ * Groups objects with a shared property value, but retains the ordering in the original array
+ * (i.e. only groups items that are adjacent).
+ */
+export function orderPreservingGroupBy<TObj, TVal>(objects: TObj[], accessor: (obj: TObj) => TVal): TObj[][] {
+  const results: TObj[][] = [];
+  if (objects.length === 0) {
+    return results;
+  }
+
+  let lastVal = accessor(objects[0]);
+  let lastGroup: TObj[] = [objects[0]];
+  results.push(lastGroup);
+  for (let i = 1; i < objects.length; i++) {
+    const thisObj = objects[i];
+    const thisVal = accessor(thisObj);
+    if (thisVal === lastVal) {
+      lastGroup.push(thisObj);
+    } else {
+      lastVal = thisVal;
+      lastGroup = [thisObj];
+      results.push(lastGroup);
+    }
+  }
+
+  return results;
+}
+
 export type ItemWithValue<T> = {
   item: T;
   value: number;

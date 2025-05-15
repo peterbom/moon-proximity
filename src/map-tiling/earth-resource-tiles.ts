@@ -1,8 +1,8 @@
-import { seq, splitByProperty } from "../common/iteration";
+import { orderPreservingGroupBy, seq, splitByProperty } from "../common/iteration";
 import type { Vector2 } from "../common/numeric-types";
 import { TextureDefinition } from "../webgl/texture-definition";
 import { createDownloadingTexture } from "../webgl/texture-utils";
-import type { EarthResourceTile, ImageDimensions } from "./tile-types";
+import type { EarthResourceTile, ImageDimensions, RectangularTileLayout, TileSelectionData } from "./tile-types";
 
 const horizontalTileCount = 32;
 const verticalTileCount = 16;
@@ -38,6 +38,52 @@ export function getEarthResourceTile(geodeticCoords: Vector2): EarthResourceTile
   const rowIndex = Math.floor((Math.PI / 2 - lat) / latitudeRadiansPerTile);
   const index = columnIndex * verticalTileCount + rowIndex;
   return allEarthResourceTiles[index];
+}
+
+/**
+ * Gets the tiles needed to cover the supplied selection data. Results are:
+ * 1. Grouped West to East
+ * 2. Ordered North to South
+ */
+export function getGroupedOrderedTiles(
+  selectionData: TileSelectionData,
+  distanceAboveMinCutoff: number
+): EarthResourceTile[][] {
+  const tiles = new Map<number, { tile: EarthResourceTile; time: number }>();
+  selectionData.distancesAboveMin.forEach((distanceAboveMin, i) => {
+    if (distanceAboveMin < distanceAboveMinCutoff) {
+      const coords = selectionData.geodeticCoords[i];
+      const time = selectionData.unixSeconds[i];
+      const tile = getEarthResourceTile(coords);
+      if (!tiles.has(tile.index)) {
+        tiles.set(tile.index, { tile, time });
+      }
+    }
+  });
+
+  // Sorting West to East cannot be done by looking at coordinates (lat/long), because the data
+  // might span -180/+180 degrees longitude, meaning that 179 degrees is West of (before) -179 degrees.
+  // Instead we can sort by descending time. As the Earth spins, locations to the East will experience
+  // maximal proximity to the moon *before* locations to the West.
+  const westToEastTiles = [...tiles.values()].sort((a, b) => b.time - a.time).map((x) => x.tile);
+
+  // North/South ordering is still indeterminate. Keep the West->East ordering but group by longitude
+  // and sort each group by descending latitude.
+  const westToEastTileGroups = orderPreservingGroupBy(westToEastTiles, (t) => t.startLon);
+  westToEastTileGroups.forEach((group) => group.sort((a, b) => b.startLat - a.startLat));
+
+  return westToEastTileGroups;
+}
+
+export function getRectangularTileLayout(groupedOrderedTiles: EarthResourceTile[][]): RectangularTileLayout {
+  const startLongitudes = groupedOrderedTiles.map((g) => g[0].startLon);
+  const startLatitudeSet = new Set<number>(groupedOrderedTiles.flat().map((tile) => tile.startLat));
+  const startLatitudes = [...startLatitudeSet.values()].sort((a, b) => b - a); // sort descending
+
+  return {
+    startLatitudes,
+    startLongitudes,
+  };
 }
 
 export class ImageElementTileDownloader {

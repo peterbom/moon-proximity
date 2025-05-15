@@ -1,18 +1,18 @@
+import type { Vector2 } from "../common/numeric-types";
 import type { ProgramInfo } from "../webgl/program-types";
-import {
+import type {
   CombineHeightDistanceAttribValues,
   CombineHeightDistanceUniformValues,
 } from "../webgl/programs/combine-height-distance";
-import {
+import type {
   ProximityHeightMapAttribValues,
   ProximityHeightMapUniformValues,
 } from "../webgl/programs/proximity-height-map";
-import {
+import type {
   TextureAttributeSimpleObjectAttribValues,
   TextureAttributeSimpleObjectUniformValues,
 } from "../webgl/programs/simple-object";
-import type { ColorTileProcessor } from "./color-tile-processor";
-import type { ElevationTileProcessor } from "./elevation-tile-processor";
+import type { ReadableTexture } from "../webgl/texture-utils";
 
 export type ImageDimensions = {
   width: number;
@@ -26,25 +26,23 @@ export type EarthResourceTile = {
   filenameBase: string;
 };
 
-export type StructuredTileProcessors = {
-  orderedTiles: EarthResourceTile[];
-  combinedColorTexture: WebGLTexture;
-  tileProcessorLookup: Map<EarthResourceTile, SingleTileProcessors>;
-  longitudeTileProcessors: LongitudeTileProcessors[];
+export type TileSelectionData = {
+  distancesAboveMin: number[];
+  geodeticCoords: Vector2[];
+  unixSeconds: number[];
 };
 
-export type LongitudeTileProcessors = {
-  startLon: number;
-  singleTileProcessors: SingleTileProcessors[];
+export type RectangularTileLayout = {
+  startLongitudes: number[];
+  startLatitudes: number[];
 };
 
-export type SingleTileProcessors = {
-  tile: EarthResourceTile;
-  elevation: ElevationTileProcessor;
-  color: ColorTileProcessor;
+export type TileToTextureScale = {
+  scaleX: (tilePixelX: number) => number;
+  scaleY: (tilePixelY: number) => number;
 };
 
-export type ProximityTilePrograms = {
+export type ElevationTilePrograms = {
   proximityHeightMapProgramInfo: ProgramInfo<ProximityHeightMapAttribValues, ProximityHeightMapUniformValues>;
   combineHeightDistanceProgramInfo: ProgramInfo<CombineHeightDistanceAttribValues, CombineHeightDistanceUniformValues>;
 };
@@ -60,4 +58,11 @@ export type TileProximityValues = {
   data: Float32Array;
   width: number;
   height: number;
+};
+
+export type TileOutputTextures = {
+  proximities: ReadableTexture;
+  elevations: ReadableTexture;
+  distancesAboveMin: ReadableTexture;
+  unixSeconds: ReadableTexture;
 };

@@ -16,3 +16,7 @@ export const highlightClosestKmCount = 10;
 
 export const displayStartDate = new Date("2025-01-01T00:00:00Z");
 export const displayEndDate = new Date("2035-01-01T00:00:00Z");
+
+// https://visibleearth.nasa.gov/images/73934/topography
+// "Data in these images were scaled 0-6400 meters"
+export const elevationScaleFactor = 6400.0;
