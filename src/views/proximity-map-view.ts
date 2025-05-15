@@ -389,7 +389,7 @@ function runWithReadyResources(context: MultiViewContext, resources: ReadyResour
   const terrainObjectUniformCollector = uniformContext
     .createCollector<TextureAttributeSimpleObjectUniformValues, CommonSceneObject>()
     .withObjectUniforms(getCommonSceneObjectUniformValues)
-    .withObjectUniform("u_texture", () => resources.terrainData.colorTexture);
+    .withObjectUniform("u_texture", () => resources.terrainData.colorTexture.texture);
 
   const terrainPickingUniformCollector = uniformContext
     .createCollector<PickingUniformValues, CommonSceneObject>()

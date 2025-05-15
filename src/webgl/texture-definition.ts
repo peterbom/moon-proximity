@@ -28,7 +28,7 @@ const internalFormatValues = {
   },
   R32F: {
     value: WebGL2RenderingContext.R32F,
-    arrayBufferCtor: Uint16Array,
+    arrayBufferCtor: Float32Array,
     format: WebGL2RenderingContext.RED,
     type: WebGL2RenderingContext.FLOAT,
     valuesPerPixel: 1,
@@ -92,6 +92,13 @@ const internalFormatValues = {
 } as const;
 
 export type InternalFormat = Extract<keyof typeof internalFormatValues, string>;
+
+const integerFormats: number[] = [
+  WebGL2RenderingContext.RED_INTEGER,
+  WebGL2RenderingContext.RG_INTEGER,
+  WebGL2RenderingContext.RGB_INTEGER,
+  WebGL2RenderingContext.RGBA_INTEGER,
+];
 
 const floatTypes: number[] = [WebGL2RenderingContext.FLOAT, WebGL2RenderingContext.HALF_FLOAT];
 const unsignedIntTypes: number[] = [
@@ -213,20 +220,24 @@ export class TextureDefinition {
     return this.properties.createMipmap ? Math.floor(Math.log2(Math.min(dimensions.width, dimensions.height))) + 1 : 1;
   }
 
-  public isFloat() {
+  public isIntegerFormat() {
+    return integerFormats.includes(internalFormatValues[this.properties.internalFormat].format);
+  }
+
+  public isFloatType() {
     return floatTypes.includes(internalFormatValues[this.properties.internalFormat].type);
   }
 
-  public isInt() {
+  public isIntType() {
     return intTypes.includes(internalFormatValues[this.properties.internalFormat].type);
   }
 
-  public isUnsignedInt() {
+  public isUnsignedIntType() {
     return unsignedIntTypes.includes(internalFormatValues[this.properties.internalFormat].type);
   }
 
   private getExtensions(gl: WebGL2RenderingContext) {
-    if (this.isFloat()) {
+    if (this.isFloatType()) {
       // Needed to render floats to the color buffer.
       gl.getExtension("EXT_color_buffer_float");
     }

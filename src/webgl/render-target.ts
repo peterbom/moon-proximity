@@ -200,26 +200,38 @@ export class FramebufferRenderTarget<TTextures extends ProgramOutputTextureInfos
     return textureInfo;
   }
 
-  public clear() {
+  public clear(color: Vector4 = [0, 0, 0, 0]) {
     this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.framebuffer);
 
     // Needs to work for different texture types: https://stackoverflow.com/a/75045836
+    // three.js: https://github.com/mrdoob/three.js/blob/4562e8acd4f7cf1f7657630505dc2ac7e9f318d7/src/renderers/WebGLRenderer.js#L882-L929
     if (this.depthTextureInfo !== null) {
       this.gl.clearBufferfv(this.gl.DEPTH, 0, [1]);
     }
 
     Object.values(this.colorTextureInfos).forEach((info) => {
-      if (info.definition.isFloat()) {
-        this.gl.clearBufferfv(this.gl.COLOR, info.attachmentIndex, [0, 0, 0, 0]);
-      } else if (info.definition.isInt()) {
-        this.gl.clearBufferiv(this.gl.COLOR, info.attachmentIndex, [0, 0, 0, 0]);
-      } else if (info.definition.isUnsignedInt()) {
-        info.renderProperties.valuesPerPixel;
-        this.gl.clearBufferuiv(this.gl.COLOR, info.attachmentIndex, [0, 0, 0, 0]);
+      if (info.definition.isIntegerFormat()) {
+        if (info.definition.isFloatType()) {
+          this.gl.clearBufferfv(this.gl.COLOR, info.attachmentIndex, color);
+        } else if (info.definition.isIntType()) {
+          this.gl.clearBufferiv(this.gl.COLOR, info.attachmentIndex, color);
+        } else if (info.definition.isUnsignedIntType()) {
+          this.gl.clearBufferuiv(this.gl.COLOR, info.attachmentIndex, color);
+        } else {
+          throw new Error(`Unexpected texture type: ${info.renderProperties.type}`);
+        }
       } else {
-        throw new Error(`Unexpected texture type: ${info.renderProperties.type}`);
+        this.gl.drawBuffers([
+          ...Array(info.attachmentIndex).fill(this.gl.NONE),
+          this.gl.COLOR_ATTACHMENT0 + info.attachmentIndex,
+        ]);
+        this.gl.clearColor(...color);
+        this.gl.clear(this.gl.COLOR_BUFFER_BIT);
       }
     });
+
+    // Clearing individual textures might have altered our draw buffer setting: restore it.
+    setDrawBuffers(this.gl, this.framebuffer, this.colorTextureInfos);
 
     this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
   }
