@@ -21,10 +21,10 @@ void main() {
 }
 `;
 
-const fragmentShaderSrc = /*glsl*/ `#version 300 es
+const fragmentShaderSrcTemplate = /*glsl*/ `#version 300 es
 precision highp float;
 
-in vec4 v_values;
+{{${flatValuePlaceholder}}} in vec4 v_values;
 
 uniform uint u_id;
 
@@ -61,6 +61,7 @@ export function createPickingProgramInfo(
   };
 
   const vertexShaderSrc = replacePlaceholders(vertexShaderSrcTemplate, substitutions);
+  const fragmentShaderSrc = replacePlaceholders(fragmentShaderSrcTemplate, substitutions);
   return createProgramInfo(gl, vertexShaderSrc, fragmentShaderSrc);
 }
 

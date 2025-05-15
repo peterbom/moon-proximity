@@ -31,7 +31,7 @@ export function createMouseMovePicking(
 ): MouseMovePickingHandlers {
   const listeners: MouseEventListeners = {
     move(coords) {
-      if (!pickingRenderTarget.checkFramebufferStatus) {
+      if (!pickingRenderTarget.checkFramebufferStatus(false)) {
         return;
       }
 

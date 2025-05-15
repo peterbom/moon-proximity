@@ -1,4 +1,4 @@
-import { orderPreservingGroupBy, seq, splitByProperty } from "../common/iteration";
+import { orderPreservingGroupBy, seq } from "../common/iteration";
 import type { Vector2 } from "../common/numeric-types";
 import { TextureDefinition } from "../webgl/texture-definition";
 import { createDownloadingTexture } from "../webgl/texture-utils";
@@ -87,7 +87,6 @@ export function getRectangularTileLayout(groupedOrderedTiles: EarthResourceTile[
 }
 
 export class ImageElementTileDownloader {
-  private readonly downloadedFiles = new Map<number, WebGLTexture>();
   protected readonly tileDimensions: ImageDimensions;
 
   constructor(
@@ -109,20 +108,11 @@ export class ImageElementTileDownloader {
     ) => void = () => {}
   ): Promise<void> {
     const self = this;
-    const { matching: downloaded, notMatching: notDownloaded } = splitByProperty(tiles, (t) =>
-      self.downloadedFiles.has(t.index)
-    );
 
-    downloaded.forEach((tile) => {
-      const texture = self.downloadedFiles.get(tile.index)!;
-      itemDownloaded(tile, texture, self.textureDefinition);
-    });
-
-    const promises = notDownloaded.map(async (tile) => {
+    const promises = tiles.map(async (tile) => {
       const imageSrc = `${self.folderPath}${tile.filenameBase}.${self.extension}`;
       await new Promise<void>((resolve) => {
         createDownloadingTexture(gl, imageSrc, self.textureDefinition, [0, 0, 0, 0], (texture) => {
-          self.downloadedFiles.set(tile.index, texture);
           itemDownloaded(tile, texture, self.textureDefinition);
           resolve();
         });

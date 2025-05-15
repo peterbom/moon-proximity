@@ -66,7 +66,7 @@ export class ProximityTerrainData {
     private readonly gl: WebGL2RenderingContext,
     private readonly groupedOrderedTiles: EarthResourceTile[][],
     tileOutputTextures: Map<EarthResourceTile, TileOutputTextures>,
-    private readonly colorTexture: ReadableTexture,
+    public readonly colorTexture: ReadableTexture,
     private readonly terrainTileDimensions: TerrainTileDimensions
   ) {
     this.orderedTiles = groupedOrderedTiles.flat();
@@ -89,7 +89,7 @@ export class ProximityTerrainData {
 
     // Having used the proximity textures to calculate the longitude lines, they're no longer
     // required.
-    proximityTextures.forEach((texture) => gl.deleteTexture(texture));
+    proximityTextures.forEach((readable) => gl.deleteTexture(readable.texture));
 
     this.cachedTopLocations = this.calculateTopClosestPoints(cachedTopCount);
   }
@@ -222,9 +222,9 @@ export class ProximityTerrainData {
   }
 
   public clean() {
-    this.elevationTextures.forEach((texture) => this.gl.deleteTexture(texture.texture));
-    this.distancesAboveMinTextures.forEach((texture) => this.gl.deleteTexture(texture.texture));
-    this.unixSecondsTextures.forEach((texture) => this.gl.deleteTexture(texture.texture));
+    this.elevationTextures.forEach((readable) => this.gl.deleteTexture(readable.texture));
+    this.distancesAboveMinTextures.forEach((readable) => this.gl.deleteTexture(readable.texture));
+    this.unixSecondsTextures.forEach((readable) => this.gl.deleteTexture(readable.texture));
   }
 }
 

@@ -2,20 +2,28 @@ import { Cleanup } from "../common/cleanup";
 import { createTextOverlay, OverlayElement, setAbsoluteStyleRect, setupSlider, StyleRect } from "../common/html-utils";
 import { IdGenerator } from "../common/id-generator";
 import { degToRad, radToDeg } from "../common/math";
+import { compose4, makeViewProjectionMatrices } from "../common/matrices";
 import type { Vector2, Vector3, Vector4 } from "../common/numeric-types";
 import { addVectors, getSpatialExtent } from "../common/vectors";
-import { asScaleTransform, asTranslation, asYRotation, asZRotation, TransformSeries } from "../common/xform";
+import {
+  asScaleTransform,
+  asTranslation,
+  asYRotation,
+  asZRotation,
+  getTransformSeriesMatrix,
+  TransformSeries,
+} from "../common/xform";
 import { earthEquatorialRadius } from "../constants";
 import { createPinShapeData, ProximityShapeData } from "../geo-shape-data";
 import { ProximityTileCollection } from "../map-tiling/proximity-tile-collection";
-import type { StructuredTileProcessors } from "../map-tiling/tile-types";
 import { ProximityTerrainData } from "../proximity-terrain-data";
 import type { State } from "../state-types";
 import { createVertexAttribsInfo } from "../webgl/attributes";
 import { addMouseListeners } from "../webgl/canvas-interaction";
 import type { MultiViewContext } from "../webgl/context";
 import type { CanvasCoordinates, ScreenRect } from "../webgl/dimension-types";
-import { addDragHandlers } from "../webgl/drag-interaction";
+import { addDragHandlers, DragData } from "../webgl/drag-interaction";
+import { DrawOptions } from "../webgl/draw-options";
 import { createMouseMovePicking, createPickingRenderTarget, MousePickResult } from "../webgl/picking-utils";
 import { ProgramInfo, VertexAttribsInfo } from "../webgl/program-types";
 import {
@@ -28,6 +36,7 @@ import {
 import {
   ColorAttributeSimpleObjectAttribValues,
   ColorAttributeSimpleObjectUniformValues,
+  CommonSimpleObjectUniformValues,
   createColorAttributeSimpleObjectProgramInfo,
   createColorAttributeSimpleObjectVao,
   createTextureAttributeSimpleObjectProgramInfo,
@@ -39,9 +48,11 @@ import {
   UniformColorSimpleObjectAttribValues,
   UniformColorSimpleObjectUniformValues,
 } from "../webgl/programs/simple-object";
-import { FramebufferRenderTarget } from "../webgl/render-target";
+import { FramebufferRenderTarget, ScreenRenderTarget } from "../webgl/render-target";
+import { SceneRenderer } from "../webgl/scene-renderer";
 import type { ObjectWithId } from "../webgl/scene-types";
 import { createPlaneShapeData, createStraightLineShapeData } from "../webgl/shape-generation";
+import { UniformContext } from "../webgl/uniforms";
 
 const idGenerator = new IdGenerator(1);
 const cleanup = new Cleanup();
@@ -58,6 +69,7 @@ const viewInfo = {
   fieldOfView: degToRad(60),
   nearLimit: 0.001,
   farLimit: 10,
+  pinCount: 1,
 };
 
 const straightLineShapeData = createStraightLineShapeData([1, 0, 0]);
@@ -196,13 +208,20 @@ function runWithReadyResources(context: MultiViewContext, resources: ReadyResour
     max: 90,
   });
 
+  setupSlider(context.virtualCanvas, "pins", {
+    value: viewInfo.pinCount,
+    updated: updatePinCount,
+    min: 1,
+    max: 10,
+  });
+
   const closestPoints = resources.terrainData.getTopClosestPoints(10);
   const terrainShapeData = resources.terrainData.createShapeData();
   const terrainSpatialExtent = getSpatialExtent(terrainShapeData.positions);
 
   const terrainObject: CommonSceneObject = {
     id: idGenerator.getNextId(),
-    getTransforms: () => [],
+    getTransforms: () => [asScaleTransform([1, 1, viewInfo.heightScaleFactor])],
     show: true,
   };
 
@@ -242,7 +261,6 @@ function runWithReadyResources(context: MultiViewContext, resources: ReadyResour
       asScaleTransform(viewInfo.cameraDistance * Math.tan(viewInfo.fieldOfView) * 0.05),
       asTranslation([location.latLong.long, location.latLong.lat, viewInfo.heightScaleFactor * location.proximity]),
     ],
-    color: [1, 0, 0, 1],
     rank: i + 1,
     show: true,
   }));
@@ -257,10 +275,15 @@ function runWithReadyResources(context: MultiViewContext, resources: ReadyResour
     context.multiSceneDrawer.requestRedraw(context.virtualCanvas);
   }
 
-  function handleMouseDrag(_rotationMatix: number[], delta: Vector3) {
+  function updatePinCount(pinCount: number) {
+    viewInfo.pinCount = pinCount;
+    context.multiSceneDrawer.requestRedraw(context.virtualCanvas);
+  }
+
+  function handleMouseDrag(dragData: DragData) {
     // The delta is an approximation of clip space (i.e. the y-axis is up/down).
     // Translate x deltas to longitudinal movement and y deltas to latitude.
-    const [deltaX, deltaY] = delta;
+    const [deltaX, deltaY] = dragData.positionDelta;
     const visibleDistancePerClipUnit = viewInfo.cameraDistance * Math.tan(viewInfo.fieldOfView / 2);
 
     const cosRot = Math.cos(viewInfo.rotation);
@@ -357,64 +380,91 @@ function runWithReadyResources(context: MultiViewContext, resources: ReadyResour
   cleanup.add(terrainCoordPickingVao);
   cleanup.add(terrainTilePickingVao);
 
-  const simpleShapeUniformCollector = new SimpleShapeUniformCollector(sceneInfo);
-  const terrainObjectUniformCollector = new TerrainObjectUniformCollector(sceneInfo);
-  const pickingUniformCollector = createPickingUniformCollector(terrainObjectUniformCollector, (obj, values) => ({
-    u_id: obj.id,
-    u_matrix: values.u_matrix,
-  }));
+  const uniformContext = UniformContext.create((rect) => getSceneContext(resources, rect));
+
+  const uniformColorSimpleObjectUniformCollector = uniformContext
+    .createCollector<UniformColorSimpleObjectUniformValues, UniformColorSceneObject>()
+    .withObjectUniforms(getCommonSceneObjectUniformValues);
+
+  const terrainObjectUniformCollector = uniformContext
+    .createCollector<TextureAttributeSimpleObjectUniformValues, CommonSceneObject>()
+    .withObjectUniforms(getCommonSceneObjectUniformValues)
+    .withObjectUniform("u_texture", () => resources.terrainData.colorTexture);
+
+  const terrainPickingUniformCollector = uniformContext
+    .createCollector<PickingUniformValues, CommonSceneObject>()
+    .withObjectUniforms(getCommonSceneObjectUniformValues)
+    .withObjectUniform("u_id", (_context, obj) => obj.id);
+
+  const colorAttributeSimpleObjectUniformCollector = uniformContext
+    .createCollector<ColorAttributeSimpleObjectUniformValues, CommonSceneObject>()
+    .withObjectUniforms(getCommonSceneObjectUniformValues);
+
+  const screenRenderTarget = new ScreenRenderTarget(gl);
 
   const sceneRenderer = new SceneRenderer(gl);
+
   sceneRenderer.addSceneObjects(
     [terrainObject].filter((o) => o.show),
     terrainObjectUniformCollector,
-    textureAttributeSimpleObjectProgramInfo,
-    simpleShapeTextureVaoLookup,
-    () => null,
-    (pixelRect) => {
-      initDraw(gl, pixelRect);
-    }
+    resources.programs.textureAttributeSimpleObjectProgramInfo,
+    terrainVao,
+    screenRenderTarget,
+    DrawOptions.default()
   );
 
-  addPickingSceneObjects(
-    gl,
-    sceneRenderer,
+  sceneRenderer.addSceneObjects(
     [terrainObject].filter((o) => o.show),
-    pickingShapeVaoLookup,
-    pickingUniformCollector,
-    pickingInfo
+    terrainPickingUniformCollector,
+    resources.programs.interpolatePickingProgramInfo,
+    terrainCoordPickingVao,
+    resources.coordsPickingRenderTarget,
+    DrawOptions.default()
+  );
+
+  sceneRenderer.addSceneObjects(
+    [terrainObject].filter((o) => o.show),
+    terrainPickingUniformCollector,
+    resources.programs.flatPickingProgramInfo,
+    terrainTilePickingVao,
+    resources.tilePickingRenderTarget,
+    DrawOptions.default()
   );
 
   sceneRenderer.addSceneObjects(
     [horizontalPlaneObject].filter((o) => o.show),
-    simpleShapeUniformCollector,
-    uniformColorSimpleObjectProgramInfo,
-    simpleObjectVaoLookup,
-    () => null,
-    (pixelRect) => {
-      initDraw(gl, pixelRect, { depthMask: false, depthTest: true, blendConfig: true });
-    }
+    uniformColorSimpleObjectUniformCollector,
+    resources.programs.uniformColorSimpleObjectProgramInfo,
+    resources.vaos.horizontalPlane,
+    screenRenderTarget,
+    DrawOptions.default().blend(true).depthMask(false).depthTest(true)
   );
 
   sceneRenderer.addSceneObjects(
-    [...lineObjects, ...pinObjects].filter((o) => o.show),
-    simpleShapeUniformCollector,
-    uniformColorSimpleObjectProgramInfo,
-    simpleObjectVaoLookup,
-    () => null,
-    (pixelRect) => {
-      initDraw(gl, pixelRect);
-    }
+    lineObjects.filter((o) => o.show),
+    uniformColorSimpleObjectUniformCollector,
+    resources.programs.uniformColorSimpleObjectProgramInfo,
+    resources.vaos.straightLine,
+    screenRenderTarget,
+    DrawOptions.default()
+  );
+
+  sceneRenderer.addSceneObjects(
+    pinObjects,
+    colorAttributeSimpleObjectUniformCollector,
+    resources.programs.colorAttributeSimpleObjectProgramInfo,
+    resources.vaos.pin,
+    screenRenderTarget,
+    DrawOptions.default()
   );
 
   cleanup.add(addDragHandlers(context.combinedCanvas, context.virtualCanvas, handleMouseDrag));
   cleanup.add(addMouseListeners(context.combinedCanvas, context.virtualCanvas, { scroll: handleZoom }));
   cleanup.add(
     createMouseMovePicking(
-      gl,
       context.combinedCanvas,
       context.virtualCanvas,
-      pickingInfo.pickingBuffers,
+      resources.tilePickingRenderTarget,
       handleMousePick
     )
   );
@@ -423,67 +473,6 @@ function runWithReadyResources(context: MultiViewContext, resources: ReadyResour
 
   function drawScene(pixelRect: ScreenRect) {
     sceneRenderer.render(pixelRect);
-  }
-}
-
-class SimpleShapeUniformCollector extends UniformCollector<
-  SceneContext,
-  UniformColorSceneObject,
-  SimpleShapeUniformValues,
-  never
-> {
-  constructor(private readonly sceneInfo: SceneInfo) {
-    super();
-  }
-
-  protected getSceneContextImpl(pixelRect: ElementRectangle): SceneContext {
-    return getSceneContext(this.sceneInfo, pixelRect);
-  }
-
-  protected getSceneUniformValuesImpl(): Pick<SimpleShapeUniformValues, never> {
-    return {};
-  }
-
-  public getObjectUniformValues(context: SceneContext, obj: UniformColorSceneObject): SimpleShapeUniformValues {
-    const worldMatrix = getTransformSeriesMatrix(obj.getTransforms());
-    const matrix = compose4(worldMatrix, context.viewProjectionMatrix);
-    return {
-      u_matrix: matrix,
-      u_color: obj.color,
-    };
-  }
-}
-
-class TerrainObjectUniformCollector extends UniformCollector<
-  SceneContext,
-  CommonSceneObject,
-  SimpleShapeTextureUniformValues,
-  "u_matrix"
-> {
-  constructor(private readonly sceneInfo: SceneInfo) {
-    super();
-  }
-
-  protected getSceneContextImpl(pixelRect: ElementRectangle): SceneContext {
-    return getSceneContext(this.sceneInfo, pixelRect);
-  }
-
-  protected getSceneUniformValuesImpl(context: SceneContext): Pick<SimpleShapeTextureUniformValues, "u_matrix"> {
-    const sceneTransforms = [asScaleTransform([1, 1, viewInfo.heightScaleFactor])];
-    const worldMatrix = getTransformSeriesMatrix(sceneTransforms);
-    const matrix = compose4(worldMatrix, context.viewProjectionMatrix);
-    return {
-      u_matrix: matrix,
-    };
-  }
-
-  public getObjectUniformValues(
-    _context: SceneContext,
-    obj: CommonSceneObject
-  ): Pick<SimpleShapeTextureUniformValues, "u_texture"> {
-    return {
-      u_texture: this.sceneInfo.structuredTileProcessors.combinedColorTexture,
-    };
   }
 }
 
@@ -508,7 +497,7 @@ function getSceneContext(resources: ReadyResources, pixelRect: ScreenRect): Scen
 
   const up: Vector3 = viewInfo.tiltAngle > 0 ? [0, 0, 1] : [-rotationX, -rotationY, 0];
 
-  const { viewProjectionMatrix } = createViewProjectionMatrix(cameraPosition, pixelRect.width / pixelRect.height, {
+  const { viewProjectionMatrix } = makeViewProjectionMatrices(cameraPosition, pixelRect.width / pixelRect.height, {
     cameraTargetPosition: cameraTargetPosition,
     near: viewInfo.nearLimit,
     far: viewInfo.farLimit,
@@ -517,6 +506,19 @@ function getSceneContext(resources: ReadyResources, pixelRect: ScreenRect): Scen
   });
 
   return { viewProjectionMatrix };
+}
+
+function getCommonSceneObjectUniformValues(
+  context: SceneContext,
+  obj: CommonSceneObject
+): CommonSimpleObjectUniformValues {
+  const transforms = obj.getTransforms();
+  const worldMatrix = getTransformSeriesMatrix(transforms);
+  const matrix = compose4(worldMatrix, context.viewProjectionMatrix);
+
+  return {
+    u_matrix: matrix,
+  };
 }
 
 type NewSelectionResources = {
@@ -579,10 +581,3 @@ type UniformColorSceneObject = CommonSceneObject & {
 type PinObject = CommonSceneObject & {
   rank: number;
 };
-function createViewProjectionMatrix(
-  cameraPosition: [number, number, number],
-  arg1: number,
-  arg2: { cameraTargetPosition: Vector3; near: number; far: number; up: Vector3; fov: number }
-): { viewProjectionMatrix: any } {
-  throw new Error("Function not implemented.");
-}

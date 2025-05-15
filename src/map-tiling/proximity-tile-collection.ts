@@ -25,14 +25,14 @@ import type { ColorTilePrograms, EarthResourceTile, ElevationTilePrograms, TileO
 import { TiledTextureDimensions } from "./tiled-texture-dimensions";
 
 const colorResourceDownloader = new ImageElementTileDownloader(
-  "/images/moon-proximity/earth-texture/",
+  "./resources/earth-texture/",
   "jpg",
   new TextureDefinition("RGB8").withMipmap(true),
   colorFileOriginalDimensions
 );
 
 const elevationResourceDownloader = new ImageElementTileDownloader(
-  "/images/moon-proximity/earth-height/",
+  "./resources/earth-height/",
   "png",
   new TextureDefinition("R8"),
   elevationFileOriginalDimensions
