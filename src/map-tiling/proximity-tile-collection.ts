@@ -1,6 +1,6 @@
 import { highlightClosestKmCount } from "../constants";
 import { ProximityShapeData } from "../geo-shape-data";
-import { ProximityTerrainData, TerrainTileDimensions } from "../proximity-terrain-data";
+import { ProximityTerrainData } from "../proximity-terrain-data";
 import { MultiViewContext } from "../webgl/context";
 import { createCombineHeightDistanceProgramInfo } from "../webgl/programs/combine-height-distance";
 import { createProximityHeightMapProgramInfo } from "../webgl/programs/proximity-height-map";
@@ -131,13 +131,15 @@ export class ProximityTileCollection {
 
     const colorTextureInfo = colorTileRenderTarget.getColorTextureInfo("color");
     const colorTexture = createReadableTexture(gl, colorTextureInfo.definition, colorTextureInfo.texture);
-    const terrainTileDimensions: TerrainTileDimensions = {
-      colorTiledTextureDimensions,
-      colorTileDimensions,
-      elevationTileDimensions,
-    };
 
-    return new ProximityTerrainData(gl, groupedOrderedTiles, tileOutputTextures, colorTexture, terrainTileDimensions);
+    return new ProximityTerrainData(
+      gl,
+      elevationTileDimensions,
+      colorTexture,
+      tileOutputTextures,
+      groupedOrderedTiles,
+      colorTiledTextureDimensions
+    );
   }
 }
 

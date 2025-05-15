@@ -197,6 +197,9 @@ function runWithDate(
   viewResources: ViewResources,
   selectedPerigee: Perigee | null
 ) {
+  // Every time a new date is selected, clean up previous resources.
+  cleanup.clean();
+
   if (selectedPerigee === null) {
     return;
   }

@@ -18,12 +18,6 @@ import { TiledTextureDimensions } from "./map-tiling/tiled-texture-dimensions";
 import { ScreenRect } from "./webgl/dimension-types";
 import { ReadableTexture, readTexture } from "./webgl/texture-utils";
 
-export type TerrainTileDimensions = {
-  colorTiledTextureDimensions: TiledTextureDimensions;
-  colorTileDimensions: ImageDimensions;
-  elevationTileDimensions: ImageDimensions;
-};
-
 export type TerrainLongitudeLine = {
   x: number;
   longitude: number;
@@ -56,28 +50,21 @@ export class ProximityTerrainData {
   private readonly distancesAboveMinTextures = new Map<EarthResourceTile, ReadableTexture>();
   private readonly unixSecondsTextures = new Map<EarthResourceTile, ReadableTexture>();
 
-  private readonly colorTiledTextureDimensions: TiledTextureDimensions;
-  private readonly colorTileDimensions: ImageDimensions;
-  private readonly elevationTileDimensions: ImageDimensions;
-
   private readonly cachedTopLocations: TerrainLocation[];
 
   constructor(
     private readonly gl: WebGL2RenderingContext,
-    private readonly groupedOrderedTiles: EarthResourceTile[][],
-    tileOutputTextures: Map<EarthResourceTile, TileOutputTextures>,
+    private readonly elevationTileDimensions: ImageDimensions,
     public readonly colorTexture: ReadableTexture,
-    private readonly terrainTileDimensions: TerrainTileDimensions
+    tileOutputTextures: Map<EarthResourceTile, TileOutputTextures>,
+    groupedOrderedTiles: EarthResourceTile[][],
+    colorTiledTextureDimensions: TiledTextureDimensions
   ) {
     this.orderedTiles = groupedOrderedTiles.flat();
 
-    this.colorTiledTextureDimensions = terrainTileDimensions.colorTiledTextureDimensions;
-    this.colorTileDimensions = terrainTileDimensions.colorTileDimensions;
-    this.elevationTileDimensions = terrainTileDimensions.elevationTileDimensions;
-
     const proximityTextures = new Map<EarthResourceTile, ReadableTexture>();
     tileOutputTextures.forEach((textures, tile) => {
-      const textureScaling = terrainTileDimensions.colorTiledTextureDimensions.getTileToTextureScale(tile);
+      const textureScaling = colorTiledTextureDimensions.getTileToTextureScale(tile);
       proximityTextures.set(tile, textures.proximities);
       this.tileToColorTextureScaling.set(tile, textureScaling);
       this.elevationTextures.set(tile, textures.elevations);
@@ -222,6 +209,7 @@ export class ProximityTerrainData {
   }
 
   public clean() {
+    this.gl.deleteTexture(this.colorTexture.texture);
     this.elevationTextures.forEach((readable) => this.gl.deleteTexture(readable.texture));
     this.distancesAboveMinTextures.forEach((readable) => this.gl.deleteTexture(readable.texture));
     this.unixSecondsTextures.forEach((readable) => this.gl.deleteTexture(readable.texture));

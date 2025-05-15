@@ -175,6 +175,9 @@ export async function run(context: MultiViewContext, state: State) {
 }
 
 async function runWithNewSelection(context: MultiViewContext, resources: NewSelectionResources) {
+  // Every time new data is selected, clean up previous resources.
+  cleanup.clean();
+
   if (resources.proximityShapeData === null) {
     return;
   }
