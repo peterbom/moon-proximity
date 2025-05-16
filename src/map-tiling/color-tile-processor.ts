@@ -24,8 +24,8 @@ export class ColorTileProcessor {
     const { scaleX, scaleY } = targetTextureDimensions.getTileToTextureScale(tile);
 
     const [xOffset, yOffset] = [scaleX(0), scaleY(0)];
-    const width = scaleX(tileDimensions.width) - xOffset;
-    const height = scaleY(tileDimensions.height) - yOffset;
+    const width = scaleX(tileDimensions.width + 1) - xOffset;
+    const height = scaleY(tileDimensions.height + 1) - yOffset;
     this.targetPixelRect = { xOffset, yOffset, width, height };
   }
 

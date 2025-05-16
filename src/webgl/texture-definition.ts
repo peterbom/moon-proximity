@@ -45,7 +45,7 @@ const internalFormatValues = {
     value: WebGL2RenderingContext.RG16F,
     arrayBufferCtor: Uint16Array,
     format: WebGL2RenderingContext.RG,
-    type: WebGL2RenderingContext.FLOAT,
+    type: WebGL2RenderingContext.HALF_FLOAT,
     valuesPerPixel: 2,
     readFormat: WebGL2RenderingContext.RG,
     readValuesPerPixel: 2,

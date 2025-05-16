@@ -93,11 +93,15 @@ export class ProximityTerrainData {
     // Create the shape data from a subset of the height map data for mesh generation.
     const linesForMesh = this.getLinesForMesh();
     const tileTextureScaling = this.tileToColorTextureScaling;
+    const targetTextureDimensions = this.colorTiledTextureDimensions.targetTextureDimensions;
+
     return createTerrainShapeData(linesForMesh, (t) => this.orderedTiles.indexOf(t), getTexCoords);
 
     function getTexCoords(tile: EarthResourceTile, tileX: number, tileY: number): Vector2 {
       const scaling = tileTextureScaling.get(tile)!;
-      return [scaling.scaleX(tileX), scaling.scaleY(tileY)];
+      const u = scaling.scaleX(tileX) / targetTextureDimensions.width;
+      const v = scaling.scaleY(tileY) / targetTextureDimensions.height;
+      return [u, v];
     }
   }
 

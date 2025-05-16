@@ -25,6 +25,7 @@ import { createPinShapeData, ProximityShapeData } from "../geo-shape-data";
 import { ProximityTileCollection } from "../map-tiling/proximity-tile-collection";
 import { ProximityTerrainData } from "../proximity-terrain-data";
 import type { State } from "../state-types";
+import { overlay } from "../styles/site.module.css";
 import { createVertexAttribsInfo } from "../webgl/attributes";
 import { addMouseListeners } from "../webgl/canvas-interaction";
 import type { MultiViewContext } from "../webgl/context";
@@ -163,8 +164,8 @@ export async function run(context: MultiViewContext, state: State) {
   const proximityShapeData = state.proximityShapeData.getValue();
   const resources: NewSelectionResources = {
     overlays: {
-      terrain: createTextOverlay(context.virtualCanvas, terrainDisplayHtml, getTerrainOverlayElems),
-      pin: createTextOverlay(context.virtualCanvas, pinDisplayHtml, getPinOverlayElems),
+      terrain: createTextOverlay(context.virtualCanvas, terrainDisplayHtml, getTerrainOverlayElems, overlay),
+      pin: createTextOverlay(context.virtualCanvas, pinDisplayHtml, getPinOverlayElems, overlay),
     },
     programs,
     vaos,
@@ -477,7 +478,7 @@ function runWithReadyResources(context: MultiViewContext, resources: ReadyResour
     createMouseMovePicking(
       context.combinedCanvas,
       context.virtualCanvas,
-      resources.tilePickingRenderTarget,
+      resources.coordsPickingRenderTarget,
       handleMousePick
     )
   );
