@@ -23,12 +23,10 @@ export class ColorTileProcessor {
   ) {
     const { scaleX, scaleY } = targetTextureDimensions.getTileToTextureScale(tile);
 
-    this.targetPixelRect = {
-      xOffset: scaleX(0),
-      yOffset: scaleY(0),
-      width: scaleX(tileDimensions.width),
-      height: scaleY(tileDimensions.height),
-    };
+    const [xOffset, yOffset] = [scaleX(0), scaleY(0)];
+    const width = scaleX(tileDimensions.width) - xOffset;
+    const height = scaleY(tileDimensions.height) - yOffset;
+    this.targetPixelRect = { xOffset, yOffset, width, height };
   }
 
   public updateTargetColorTexture(sourceColorTexture: WebGLTexture, renderTarget: RenderTarget) {
@@ -53,5 +51,7 @@ export class ColorTileProcessor {
     );
 
     sceneRenderer.render(this.targetPixelRect);
+
+    gl.deleteVertexArray(fullViewportVao.vao);
   }
 }

@@ -88,3 +88,50 @@ export function readTexture(
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   return readBufferInfo;
 }
+
+export function drawToCanvas(
+  canvasElem: HTMLCanvasElement,
+  readInfo: TextureReadBufferInfo,
+  flipY: boolean,
+  adjustment: (inputColor: Vector4) => Vector4 = ([r, g, b]) => [r, g, b, 255]
+) {
+  const { width, height } = readInfo.dimensions;
+  const writePixelValueCount = 4; // RGBA
+  const writeRowValueCount = width * writePixelValueCount;
+  const writeValueCount = height * writeRowValueCount;
+  const outData = new Uint8ClampedArray(writeValueCount);
+
+  const readRowValueCount = width * readInfo.valuesPerPixel;
+  for (let y = 0; y < height; y++) {
+    const readRowStartIndex = y * readRowValueCount;
+
+    const writeY = flipY ? height - 1 - y : y;
+    const writeRowStartIndex = writeY * writeRowValueCount;
+
+    for (let x = 0; x < width; x++) {
+      const readPixelStartIndex = readRowStartIndex + x * readInfo.valuesPerPixel;
+      const writePixelStartIndex = writeRowStartIndex + x * writePixelValueCount;
+
+      const inputColor: Vector4 = [0, 0, 0, 0];
+      for (let componentIndex = 0; componentIndex < readInfo.valuesPerPixel; componentIndex++) {
+        inputColor[componentIndex] = readInfo.buffer[readPixelStartIndex + componentIndex];
+      }
+
+      const outputColor = adjustment(inputColor);
+      for (let componentIndex = 0; componentIndex < writePixelValueCount; componentIndex++) {
+        outData[writePixelStartIndex + componentIndex] = outputColor[componentIndex];
+      }
+    }
+  }
+
+  const imageData = new ImageData(outData, width);
+
+  canvasElem.width = width;
+  canvasElem.height = height;
+  const context = canvasElem.getContext("2d");
+  if (context === null) {
+    throw new Error("Unable to get 2D context for canvas");
+  }
+
+  context.putImageData(imageData, 0, 0);
+}

@@ -38,8 +38,8 @@ export class TiledTextureDimensions {
     const tileYIndex = this.tileLayout.startLatitudes.indexOf(tile.startLat);
 
     // TODO: Flip Y index?
-    const xOffset = tileXIndex * this.targetTextureDimensions.width;
-    const yOffset = tileYIndex * this.targetTextureDimensions.height;
+    const xOffset = tileXIndex * this.targetTileDimensions.width;
+    const yOffset = tileYIndex * this.targetTileDimensions.height;
 
     return {
       scaleX: makeScale([0, this.tileDimensions.width], [xOffset, xOffset + this.targetTileDimensions.width]),

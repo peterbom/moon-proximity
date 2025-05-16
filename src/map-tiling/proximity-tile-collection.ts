@@ -8,7 +8,7 @@ import {
   createTextureAttributeSimpleObjectProgramInfo,
   SimpleObjectOutputTextureInfos,
 } from "../webgl/programs/simple-object";
-import { FramebufferRenderTarget } from "../webgl/render-target";
+import { DrawingRectBehavior, FramebufferRenderTarget } from "../webgl/render-target";
 import { TextureDefinition } from "../webgl/texture-definition";
 import { createReadableTexture, ReadableTexture } from "../webgl/texture-utils";
 import { ColorTileProcessor } from "./color-tile-processor";
@@ -136,9 +136,9 @@ export class ProximityTileCollection {
       gl,
       elevationTileDimensions,
       colorTexture,
+      colorTiledTextureDimensions,
       tileOutputTextures,
-      groupedOrderedTiles,
-      colorTiledTextureDimensions
+      groupedOrderedTiles
     );
   }
 }
@@ -156,5 +156,5 @@ function createColorTileRenderTarget(
         definition: new TextureDefinition("RGB8").withMagFilter("LINEAR").withMinFilter("LINEAR").withMipmap(true),
       },
     }
-  );
+  ).withDrawingRectBehavior(DrawingRectBehavior.UseSuppliedViewport);
 }

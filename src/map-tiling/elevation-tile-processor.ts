@@ -4,6 +4,7 @@ import { ProximityShapeData } from "../geo-shape-data";
 import { MultiViewContext } from "../webgl/context";
 import type { ScreenRect } from "../webgl/dimension-types";
 import { DrawOptions } from "../webgl/draw-options";
+import { VertexAttribsInfo } from "../webgl/program-types";
 import {
   CombineHeightDistanceUniformValues,
   CombineHeightOutputTextureInfos,
@@ -11,6 +12,7 @@ import {
 } from "../webgl/programs/combine-height-distance";
 import {
   createProximityHeightMapVao,
+  ProximityHeightMapAttribValues,
   ProximityHeightMapOutputTextureInfos,
   ProximityHeightMapUniformValues,
 } from "../webgl/programs/proximity-height-map";
@@ -68,6 +70,8 @@ export class ElevationTileProcessor {
     );
 
     sceneRenderer.render(this.targetPixelRect);
+
+    gl.deleteVertexArray(proximityHeightMapVao.vao);
   }
 
   public combineProximityAndElevation(elevationTexture: WebGLTexture) {
@@ -95,6 +99,8 @@ export class ElevationTileProcessor {
     );
 
     sceneRenderer.render(this.targetPixelRect);
+
+    gl.deleteVertexArray(combineHeightDistanceVao.vao);
   }
 
   public createProximityReadableTexture(): ReadableTexture {

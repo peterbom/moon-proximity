@@ -1,5 +1,12 @@
 import { Cleanup } from "../common/cleanup";
-import { createTextOverlay, OverlayElement, setAbsoluteStyleRect, setupSlider, StyleRect } from "../common/html-utils";
+import {
+  createTextOverlay,
+  getOrCreateAbsolutePositionCanvas,
+  OverlayElement,
+  setAbsoluteStyleRect,
+  setupSlider,
+  StyleRect,
+} from "../common/html-utils";
 import { IdGenerator } from "../common/id-generator";
 import { degToRad, radToDeg } from "../common/math";
 import { compose4, makeViewProjectionMatrices } from "../common/matrices";
@@ -52,7 +59,10 @@ import { FramebufferRenderTarget, ScreenRenderTarget } from "../webgl/render-tar
 import { SceneRenderer } from "../webgl/scene-renderer";
 import type { ObjectWithId } from "../webgl/scene-types";
 import { createPlaneShapeData, createStraightLineShapeData } from "../webgl/shape-generation";
+import { drawToCanvas, readTexture } from "../webgl/texture-utils";
 import { UniformContext } from "../webgl/uniforms";
+
+const debugColorTexture = false;
 
 const idGenerator = new IdGenerator(1);
 const cleanup = new Cleanup();
@@ -476,6 +486,20 @@ function runWithReadyResources(context: MultiViewContext, resources: ReadyResour
 
   function drawScene(pixelRect: ScreenRect) {
     sceneRenderer.render(pixelRect);
+
+    if (debugColorTexture) {
+      const { width, height } = resources.terrainData.colorTiledTextureDimensions.targetTextureDimensions;
+
+      const canvasElem = getOrCreateAbsolutePositionCanvas(context.virtualCanvas, {
+        width,
+        height,
+        left: -context.virtualCanvas.clientLeft,
+        top: context.virtualCanvas.clientHeight + 5,
+      });
+
+      const readInfo = readTexture(gl, resources.terrainData.colorTexture, { xOffset: 0, yOffset: 0, width, height });
+      drawToCanvas(canvasElem, readInfo, false);
+    }
   }
 }
 

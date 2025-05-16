@@ -56,9 +56,9 @@ export class ProximityTerrainData {
     private readonly gl: WebGL2RenderingContext,
     private readonly elevationTileDimensions: ImageDimensions,
     public readonly colorTexture: ReadableTexture,
+    public readonly colorTiledTextureDimensions: TiledTextureDimensions,
     tileOutputTextures: Map<EarthResourceTile, TileOutputTextures>,
-    groupedOrderedTiles: EarthResourceTile[][],
-    colorTiledTextureDimensions: TiledTextureDimensions
+    groupedOrderedTiles: EarthResourceTile[][]
   ) {
     this.orderedTiles = groupedOrderedTiles.flat();
 

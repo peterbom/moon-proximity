@@ -6,7 +6,7 @@ import {
   TextureReadBufferInfo,
   TextureRenderProperties,
 } from "./texture-definition";
-import { readTexture } from "./texture-utils";
+import { drawToCanvas, readTexture } from "./texture-utils";
 
 export enum SizeType {
   FitToViewport,
@@ -60,8 +60,14 @@ export class ScreenRenderTarget implements RenderTarget {
   }
 }
 
+export enum DrawingRectBehavior {
+  UseSuppliedViewport,
+  UseTextureDimensions,
+}
+
 export class FramebufferRenderTarget<TTextures extends ProgramOutputTextureInfos> implements RenderTarget {
   private depthTextureInfo: TextureInfo | null = null;
+  private drawingRectBehavior = DrawingRectBehavior.UseTextureDimensions;
 
   private constructor(
     private readonly gl: WebGL2RenderingContext,
@@ -114,10 +120,19 @@ export class FramebufferRenderTarget<TTextures extends ProgramOutputTextureInfos
     return this;
   }
 
+  public withDrawingRectBehavior(behavior: DrawingRectBehavior): FramebufferRenderTarget<TTextures> {
+    this.drawingRectBehavior = behavior;
+    return this;
+  }
+
   public getDrawingRect(viewportRect: ScreenRect): ScreenRect {
     if (this.sizeType === SizeType.FixedSize) {
-      const { width, height } = this.dimensions;
-      return { xOffset: 0, yOffset: 0, width, height };
+      if (this.drawingRectBehavior === DrawingRectBehavior.UseSuppliedViewport) {
+        return viewportRect;
+      } else {
+        const { width, height } = this.dimensions;
+        return { xOffset: 0, yOffset: 0, width, height };
+      }
     }
 
     const { width, height } = viewportRect;
@@ -244,45 +259,7 @@ export class FramebufferRenderTarget<TTextures extends ProgramOutputTextureInfos
   ) {
     const { width, height } = this.dimensions;
     const readInfo = this.readColorTexture(textureName, { xOffset: 0, yOffset: 0, width, height });
-
-    const writePixelValueCount = 4; // RGBA
-    const writeRowValueCount = width * writePixelValueCount;
-    const writeValueCount = height * writeRowValueCount;
-    const outData = new Uint8ClampedArray(writeValueCount);
-
-    const readRowValueCount = width * readInfo.valuesPerPixel;
-    for (let y = 0; y < height; y++) {
-      const readRowStartIndex = y * readRowValueCount;
-
-      const writeY = flipY ? height - 1 - y : y;
-      const writeRowStartIndex = writeY * writeRowValueCount;
-
-      for (let x = 0; x < width; x++) {
-        const readPixelStartIndex = readRowStartIndex + x * readInfo.valuesPerPixel;
-        const writePixelStartIndex = writeRowStartIndex + x * writePixelValueCount;
-
-        const inputColor: Vector4 = [0, 0, 0, 0];
-        for (let componentIndex = 0; componentIndex < readInfo.valuesPerPixel; componentIndex++) {
-          inputColor[componentIndex] = readInfo.buffer[readPixelStartIndex + componentIndex];
-        }
-
-        const outputColor = adjustment(inputColor);
-        for (let componentIndex = 0; componentIndex < writePixelValueCount; componentIndex++) {
-          outData[writePixelStartIndex + componentIndex] = outputColor[componentIndex];
-        }
-      }
-    }
-
-    const imageData = new ImageData(outData, width);
-
-    canvasElem.width = width;
-    canvasElem.height = height;
-    const context = canvasElem.getContext("2d");
-    if (context === null) {
-      throw new Error("Unable to get 2D context for canvas");
-    }
-
-    context.putImageData(imageData, 0, 0);
+    drawToCanvas(canvasElem, readInfo, flipY, adjustment);
   }
 
   public clean() {
