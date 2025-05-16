@@ -33,13 +33,14 @@ export type TileSelectionData = {
 };
 
 export type RectangularTileLayout = {
+  groupedOrderedTiles: EarthResourceTile[][];
   startLongitudes: number[];
   startLatitudes: number[];
 };
 
-export type TileToTextureScale = {
-  scaleX: (tilePixelX: number) => number;
-  scaleY: (tilePixelY: number) => number;
+export type PositionOnTile = {
+  tile: EarthResourceTile;
+  position: Vector2;
 };
 
 export type ElevationTilePrograms = {

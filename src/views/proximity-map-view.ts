@@ -138,8 +138,7 @@ export async function run(context: MultiViewContext, state: State) {
     textureAttributeSimpleObjectProgramInfo: createTextureAttributeSimpleObjectProgramInfo(gl),
     uniformColorSimpleObjectProgramInfo: createUniformColorSimpleObjectProgramInfo(gl),
     colorAttributeSimpleObjectProgramInfo: createColorAttributeSimpleObjectProgramInfo(gl),
-    interpolatePickingProgramInfo: createPickingProgramInfo(gl, true),
-    flatPickingProgramInfo: createPickingProgramInfo(gl, false),
+    pickingProgramInfo: createPickingProgramInfo(gl, true),
   };
 
   const vaos = {
@@ -153,7 +152,7 @@ export async function run(context: MultiViewContext, state: State) {
       programs.colorAttributeSimpleObjectProgramInfo.attribSetters,
       pinShapeData
     ),
-    pinPicking: createPositionValuePickingVao(gl, programs.interpolatePickingProgramInfo.attribSetters, pinShapeData),
+    pinPicking: createPositionValuePickingVao(gl, programs.pickingProgramInfo.attribSetters, pinShapeData),
     straightLine: createUniformColorSimpleObjectVao(
       gl,
       programs.uniformColorSimpleObjectProgramInfo.attribSetters,
@@ -332,26 +331,24 @@ function runWithReadyResources(context: MultiViewContext, resources: ReadyResour
 
     if (isTerrainObject) {
       const [x, y, z] = result.values;
-      const dataTexCoords: Vector2 = [x, y];
+      const tilePos = resources.terrainData.getTilePositionFromMap([x, y]);
 
-      const tileIndex = Math.floor(z); // TODO: Change picking so this is not interpolated.
-
-      const { lat, long } = resources.terrainData.getLatLong(tileIndex, dataTexCoords);
+      const { lat, long } = resources.terrainData.getLatLong(tilePos);
       resources.overlays.terrain.content.lat.textContent = radToDeg(lat).toFixed(2);
       resources.overlays.terrain.content.lon.textContent = radToDeg(long).toFixed(2);
 
-      const elev = resources.terrainData.getElevation(tileIndex, dataTexCoords);
+      const elev = resources.terrainData.getElevation(tilePos);
       resources.overlays.terrain.content.elev.textContent = elev.toFixed();
 
       // When displaying the overall distance, take elevation data into account (converting from m to km).
-      const distanceAboveMin = resources.terrainData.getDistanceAboveMin(tileIndex, dataTexCoords) - elev / 1000;
+      const distanceAboveMin = resources.terrainData.getDistanceAboveMin(tilePos) - elev / 1000;
       const distance = resources.proximityShapeData.minDistance + distanceAboveMin;
       resources.overlays.terrain.content.dist.textContent = Math.round(distance).toLocaleString();
 
       const deltaSign = Math.sign(distanceAboveMin) >= 0 ? "+" : "-";
       resources.overlays.terrain.content.deltaDist.textContent = `${deltaSign}${Math.abs(distanceAboveMin).toFixed(2)}`;
 
-      const unixSeconds = resources.terrainData.getUnixSeconds(tileIndex, dataTexCoords);
+      const unixSeconds = resources.terrainData.getUnixSeconds(tilePos);
       resources.overlays.terrain.content.time.textContent = new Date(unixSeconds * 1000).toISOString();
     } else if (pinObject !== undefined) {
       resources.overlays.pin.content.rank.textContent = pinObject.rank.toFixed();
@@ -366,33 +363,14 @@ function runWithReadyResources(context: MultiViewContext, resources: ReadyResour
     terrainShapeData
   );
 
-  const terrainCoordPickingVao = createVertexAttribsInfo(
+  const terrainCoordPickingVao = createPositionValuePickingVao(
     gl,
-    resources.programs.interpolatePickingProgramInfo.attribSetters,
-    {
-      attribsInfo: {
-        a_position: { type: gl.FLOAT, data: terrainShapeData.positions },
-        a_values: { type: gl.FLOAT, data: terrainShapeData.dataTexCoords },
-      },
-      indices: terrainShapeData.indices,
-    }
-  );
-
-  const terrainTilePickingVao = createVertexAttribsInfo(
-    gl,
-    resources.programs.interpolatePickingProgramInfo.attribSetters,
-    {
-      attribsInfo: {
-        a_position: { type: gl.FLOAT, data: terrainShapeData.positions },
-        a_values: { type: gl.FLOAT, data: terrainShapeData.tileIndices },
-      },
-      indices: terrainShapeData.indices,
-    }
+    resources.programs.pickingProgramInfo.attribSetters,
+    terrainShapeData
   );
 
   cleanup.add(terrainVao);
   cleanup.add(terrainCoordPickingVao);
-  cleanup.add(terrainTilePickingVao);
 
   const uniformContext = UniformContext.create((rect) => getSceneContext(resources, rect));
 
@@ -430,18 +408,9 @@ function runWithReadyResources(context: MultiViewContext, resources: ReadyResour
   sceneRenderer.addSceneObjects(
     [terrainObject].filter((o) => o.show),
     terrainPickingUniformCollector,
-    resources.programs.interpolatePickingProgramInfo,
+    resources.programs.pickingProgramInfo,
     terrainCoordPickingVao,
     resources.coordsPickingRenderTarget,
-    DrawOptions.default()
-  );
-
-  sceneRenderer.addSceneObjects(
-    [terrainObject].filter((o) => o.show),
-    terrainPickingUniformCollector,
-    resources.programs.flatPickingProgramInfo,
-    terrainTilePickingVao,
-    resources.tilePickingRenderTarget,
     DrawOptions.default()
   );
 
@@ -489,7 +458,7 @@ function runWithReadyResources(context: MultiViewContext, resources: ReadyResour
     sceneRenderer.render(pixelRect);
 
     if (debugColorTexture) {
-      const { width, height } = resources.terrainData.colorTiledTextureDimensions.targetTextureDimensions;
+      const { width, height } = resources.terrainData.colorTextureTiledArea.targetDimensions;
 
       const canvasElem = getOrCreateAbsolutePositionCanvas(context.virtualCanvas, {
         width,
@@ -582,8 +551,7 @@ type Programs = {
     ColorAttributeSimpleObjectAttribValues,
     ColorAttributeSimpleObjectUniformValues
   >;
-  interpolatePickingProgramInfo: ProgramInfo<PickingAttribValues, PickingUniformValues>;
-  flatPickingProgramInfo: ProgramInfo<PickingAttribValues, PickingUniformValues>;
+  pickingProgramInfo: ProgramInfo<PickingAttribValues, PickingUniformValues>;
 };
 
 type VaoInfos = {

@@ -254,22 +254,14 @@ export function createProximityShapeData(
   }
 }
 
-export type TerrainShapeData = ShapeData & {
-  tileIndices: number[];
-  dataTexCoords: Vector2[];
-};
-
 export function createTerrainShapeData(
   lines: TerrainLongitudeLine[],
-  getTileIndex: (tile: EarthResourceTile) => number,
-  getTexCoords: (tile: EarthResourceTile, tileX: number, tileY: number) => Vector2
-): TerrainShapeData {
+  getPositions: (tile: EarthResourceTile, tileX: number, tileY: number) => { xy: Vector2; uv: Vector2 }
+): ShapeData {
   const positions: Vector3[] = [];
   const normals: Vector3[] = [];
   const colors: Vector4[] = [];
   const texCoords: Vector2[] = [];
-  const tileIndices: number[] = [];
-  const dataTexCoords: Vector2[] = [];
 
   const pointIndexLookup = new Map<TerrainLongitudePoint, number>();
   let index = 0;
@@ -277,13 +269,14 @@ export function createTerrainShapeData(
     for (const point of line.points) {
       pointIndexLookup.set(point, index);
 
-      const [u, v] = getTexCoords(point.tile, line.x, point.y);
-      positions.push([line.longitude, point.latitude, point.value]);
+      const {
+        xy: [x, y],
+        uv: [u, v],
+      } = getPositions(point.tile, line.x, point.y);
+      positions.push([x, y, point.value]);
       normals.push([0, 0, 1]); // TODO: https://webgl2fundamentals.org/webgl/lessons/webgl-qna-how-to-import-a-heightmap-in-webgl.html
       colors.push([0, 0, 0, 1]);
       texCoords.push([u, v]);
-      tileIndices.push(getTileIndex(point.tile));
-      dataTexCoords.push([line.x, point.y]);
       index++;
     }
   }
@@ -326,8 +319,6 @@ export function createTerrainShapeData(
     normals,
     colors,
     texCoords,
-    tileIndices,
-    dataTexCoords,
     drawMode: "Triangles",
     indices,
   };

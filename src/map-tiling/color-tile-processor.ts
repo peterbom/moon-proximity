@@ -8,26 +8,14 @@ import {
 } from "../webgl/programs/simple-object";
 import { RenderTarget } from "../webgl/render-target";
 import { SceneRenderer } from "../webgl/scene-renderer";
-import type { ColorTilePrograms, EarthResourceTile, ImageDimensions } from "./tile-types";
-import { TiledTextureDimensions } from "./tiled-texture-dimensions";
+import type { ColorTilePrograms } from "./tile-types";
 
 export class ColorTileProcessor {
-  private readonly targetPixelRect: ScreenRect;
-
   constructor(
     private readonly context: MultiViewContext,
     private readonly programs: ColorTilePrograms,
-    targetTextureDimensions: TiledTextureDimensions,
-    tile: EarthResourceTile,
-    tileDimensions: ImageDimensions
-  ) {
-    const { scaleX, scaleY } = targetTextureDimensions.getTileToTextureScale(tile);
-
-    const [xOffset, yOffset] = [scaleX(0), scaleY(0)];
-    const width = scaleX(tileDimensions.width + 1) - xOffset;
-    const height = scaleY(tileDimensions.height + 1) - yOffset;
-    this.targetPixelRect = { xOffset, yOffset, width, height };
-  }
+    private readonly targetPixelRect: ScreenRect
+  ) {}
 
   public updateTargetColorTexture(sourceColorTexture: WebGLTexture, renderTarget: RenderTarget) {
     const gl = this.context.gl;

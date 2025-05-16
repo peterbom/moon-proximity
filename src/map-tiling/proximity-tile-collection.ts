@@ -13,33 +13,27 @@ import { TextureDefinition } from "../webgl/texture-definition";
 import { createReadableTexture, ReadableTexture } from "../webgl/texture-utils";
 import { ColorTileProcessor } from "./color-tile-processor";
 import {
-  colorFileOriginalDimensions,
-  elevationFileOriginalDimensions,
+  colorTileDimensions,
+  elevationTileDimensions,
   getGroupedOrderedTiles,
   getRectangularTileLayout,
-  getTileDimensions,
   ImageElementTileDownloader,
 } from "./earth-resource-tiles";
 import { ElevationTileProcessor } from "./elevation-tile-processor";
 import type { ColorTilePrograms, EarthResourceTile, ElevationTilePrograms, TileOutputTextures } from "./tile-types";
-import { TiledTextureDimensions } from "./tiled-texture-dimensions";
+import { getTiledAreaForTexture, TiledArea } from "./tiled-area";
 
 const colorResourceDownloader = new ImageElementTileDownloader(
   "./resources/earth-texture/",
   "jpg",
-  new TextureDefinition("RGB8").withMipmap(true),
-  colorFileOriginalDimensions
+  new TextureDefinition("RGB8").withMipmap(true)
 );
 
 const elevationResourceDownloader = new ImageElementTileDownloader(
   "./resources/earth-height/",
   "png",
-  new TextureDefinition("R8"),
-  elevationFileOriginalDimensions
+  new TextureDefinition("R8")
 );
-
-const colorTileDimensions = getTileDimensions(colorFileOriginalDimensions);
-const elevationTileDimensions = getTileDimensions(elevationFileOriginalDimensions);
 
 export class ProximityTileCollection {
   private readonly elevationPrograms: ElevationTilePrograms;
@@ -64,8 +58,8 @@ export class ProximityTileCollection {
 
     // Create a single render target for the color texture. Each tile's texture will be rendered to
     // the appropriate portion of this shared texture.
-    const colorTiledTextureDimensions = new TiledTextureDimensions(gl, colorTileDimensions, rectangularTileLayout);
-    const colorTileRenderTarget = createColorTileRenderTarget(gl, colorTiledTextureDimensions);
+    const colorTextureArea = getTiledAreaForTexture(gl, colorTileDimensions, rectangularTileLayout);
+    const colorTileRenderTarget = createColorTileRenderTarget(gl, colorTextureArea);
 
     const tiles = groupedOrderedTiles.flat();
 
@@ -77,7 +71,7 @@ export class ProximityTileCollection {
     tiles.forEach((tile) => {
       colorTileProcessors.set(
         tile,
-        new ColorTileProcessor(this.context, this.colorPrograms, colorTiledTextureDimensions, tile, colorTileDimensions)
+        new ColorTileProcessor(this.context, this.colorPrograms, colorTextureArea.getTargetRect(tile))
       );
       elevationTileProcessors.set(
         tile,
@@ -134,22 +128,22 @@ export class ProximityTileCollection {
 
     return new ProximityTerrainData(
       gl,
+      rectangularTileLayout,
       elevationTileDimensions,
       colorTexture,
-      colorTiledTextureDimensions,
-      tileOutputTextures,
-      groupedOrderedTiles
+      colorTextureArea,
+      tileOutputTextures
     );
   }
 }
 
 function createColorTileRenderTarget(
   gl: WebGL2RenderingContext,
-  tiledTextureDimensions: TiledTextureDimensions
+  colorTextureArea: TiledArea
 ): FramebufferRenderTarget<SimpleObjectOutputTextureInfos> {
   return FramebufferRenderTarget.createFixedSize<SimpleObjectOutputTextureInfos>(
     gl,
-    tiledTextureDimensions.targetTextureDimensions,
+    colorTextureArea.targetDimensions,
     {
       color: {
         attachmentIndex: 0,

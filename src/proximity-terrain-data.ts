@@ -1,21 +1,22 @@
 import { maxByProperty } from "./common/iteration";
 import type { Vector2 } from "./common/numeric-types";
 import { elevationScaleFactor, highlightClosestKmCount } from "./constants";
-import { createTerrainShapeData, TerrainShapeData } from "./geo-shape-data";
+import { createTerrainShapeData } from "./geo-shape-data";
 import {
-  elevationFileOriginalDimensions,
-  getTileDimensions,
+  elevationTileDimensions,
   latitudeRadiansPerTile,
   longitudeRadiansPerTile,
 } from "./map-tiling/earth-resource-tiles";
 import type {
   EarthResourceTile,
   ImageDimensions,
+  PositionOnTile,
+  RectangularTileLayout,
   TileOutputTextures,
-  TileToTextureScale,
 } from "./map-tiling/tile-types";
-import { TiledTextureDimensions } from "./map-tiling/tiled-texture-dimensions";
-import { ScreenRect } from "./webgl/dimension-types";
+import { getTiledAreaForMap, TiledArea } from "./map-tiling/tiled-area";
+import type { ScreenRect } from "./webgl/dimension-types";
+import type { ShapeData } from "./webgl/shape-types";
 import { ReadableTexture, readTexture } from "./webgl/texture-utils";
 
 export type TerrainLongitudeLine = {
@@ -42,10 +43,10 @@ const cachedTopCount = 100;
 const meshPointSpacing = 5;
 
 export class ProximityTerrainData {
-  private readonly orderedTiles: EarthResourceTile[];
   private readonly longitudeLines: TerrainLongitudeLine[];
 
-  private readonly tileToColorTextureScaling = new Map<EarthResourceTile, TileToTextureScale>();
+  private readonly mapTiledArea: TiledArea;
+  private readonly tileToColorTextureRect = new Map<EarthResourceTile, ScreenRect>();
   private readonly elevationTextures = new Map<EarthResourceTile, ReadableTexture>();
   private readonly distancesAboveMinTextures = new Map<EarthResourceTile, ReadableTexture>();
   private readonly unixSecondsTextures = new Map<EarthResourceTile, ReadableTexture>();
@@ -54,29 +55,29 @@ export class ProximityTerrainData {
 
   constructor(
     private readonly gl: WebGL2RenderingContext,
-    private readonly elevationTileDimensions: ImageDimensions,
+    private readonly rectangularTileLayout: RectangularTileLayout,
+    private readonly dataTextureDimensions: ImageDimensions,
     public readonly colorTexture: ReadableTexture,
-    public readonly colorTiledTextureDimensions: TiledTextureDimensions,
-    tileOutputTextures: Map<EarthResourceTile, TileOutputTextures>,
-    groupedOrderedTiles: EarthResourceTile[][]
+    public readonly colorTextureTiledArea: TiledArea,
+    tileOutputTextures: Map<EarthResourceTile, TileOutputTextures>
   ) {
-    this.orderedTiles = groupedOrderedTiles.flat();
-
     const proximityTextures = new Map<EarthResourceTile, ReadableTexture>();
     tileOutputTextures.forEach((textures, tile) => {
-      const textureScaling = colorTiledTextureDimensions.getTileToTextureScale(tile);
+      const colorTextureRect = colorTextureTiledArea.getTargetRect(tile);
       proximityTextures.set(tile, textures.proximities);
-      this.tileToColorTextureScaling.set(tile, textureScaling);
+      this.tileToColorTextureRect.set(tile, colorTextureRect);
       this.elevationTextures.set(tile, textures.elevations);
       this.distancesAboveMinTextures.set(tile, textures.distancesAboveMin);
       this.unixSecondsTextures.set(tile, textures.unixSeconds);
     });
 
-    this.longitudeLines = getLongitudeLines(gl, groupedOrderedTiles, proximityTextures);
+    this.longitudeLines = getLongitudeLines(gl, rectangularTileLayout.groupedOrderedTiles, proximityTextures);
 
     // Having used the proximity textures to calculate the longitude lines, they're no longer
     // required.
     proximityTextures.forEach((readable) => gl.deleteTexture(readable.texture));
+
+    this.mapTiledArea = getTiledAreaForMap(dataTextureDimensions, rectangularTileLayout);
 
     this.cachedTopLocations = this.calculateTopClosestPoints(cachedTopCount);
   }
@@ -89,19 +90,24 @@ export class ProximityTerrainData {
     return this.cachedTopLocations.slice(0, topCount);
   }
 
-  public createShapeData(): TerrainShapeData {
+  public createShapeData(): ShapeData {
     // Create the shape data from a subset of the height map data for mesh generation.
     const linesForMesh = this.getLinesForMesh();
-    const tileTextureScaling = this.tileToColorTextureScaling;
-    const targetTextureDimensions = this.colorTiledTextureDimensions.targetTextureDimensions;
+    const textureTiledArea = this.colorTextureTiledArea;
+    const mapTiledArea = this.mapTiledArea;
+    const targetDimensions = textureTiledArea.targetDimensions;
 
-    return createTerrainShapeData(linesForMesh, (t) => this.orderedTiles.indexOf(t), getTexCoords);
+    return createTerrainShapeData(linesForMesh, getPositions);
 
-    function getTexCoords(tile: EarthResourceTile, tileX: number, tileY: number): Vector2 {
-      const scaling = tileTextureScaling.get(tile)!;
-      const u = scaling.scaleX(tileX) / targetTextureDimensions.width;
-      const v = scaling.scaleY(tileY) / targetTextureDimensions.height;
-      return [u, v];
+    function getPositions(tile: EarthResourceTile, tileX: number, tileY: number) {
+      const [x, y] = mapTiledArea.getTargetPosition(tile, [tileX, tileY]);
+      const [texX, texY] = textureTiledArea.getTargetPosition(tile, [tileX, tileY]);
+      const [u, v] = [texX / targetDimensions.width, texY / targetDimensions.height];
+
+      return {
+        xy: [x, y] as Vector2,
+        uv: [u, v] as Vector2,
+      };
     }
   }
 
@@ -167,45 +173,44 @@ export class ProximityTerrainData {
     return topClosestPoints.sort((a, b) => b.proximity - a.proximity);
   }
 
-  public getLatLong(tileIndex: number, dataTexCoords: Vector2): { long: number; lat: number } {
-    const tile = this.orderedTiles[tileIndex];
+  public getTilePositionFromMap(mapPosition: Vector2): PositionOnTile {
+    return this.mapTiledArea.getPositionOnTile(mapPosition);
+  }
 
-    const [x, y] = dataTexCoords;
-    const long = tile.startLon + (x / this.elevationTileDimensions.width) * longitudeRadiansPerTile;
-    const lat = tile.startLat - (y / this.elevationTileDimensions.height) * latitudeRadiansPerTile;
+  public getLatLong(position: PositionOnTile): { long: number; lat: number } {
+    const [tileX, tileY] = position.position;
+    const long = position.tile.startLon + (tileX / elevationTileDimensions.width) * longitudeRadiansPerTile;
+    const lat = position.tile.startLat + (tileY / elevationTileDimensions.height) * latitudeRadiansPerTile;
     return { long, lat };
   }
 
-  public getElevation(tileIndex: number, dataTexCoords: Vector2): number {
-    const tile = this.orderedTiles[tileIndex];
-    const texture = this.elevationTextures.get(tile)!;
+  public getElevation(position: PositionOnTile): number {
+    const texture = this.elevationTextures.get(position.tile)!;
 
-    const [x, y] = dataTexCoords;
-    const rect: ScreenRect = { xOffset: x, yOffset: y, width: 1, height: 1 };
+    const [xOffset, yOffset] = position.position;
+    const rect: ScreenRect = { xOffset, yOffset, width: 1, height: 1 };
 
     const bufferInfo = readTexture(this.gl, texture, rect);
 
     return (bufferInfo.buffer[0] / 255) * elevationScaleFactor;
   }
 
-  public getDistanceAboveMin(tileIndex: number, dataTexCoords: Vector2): number {
-    const tile = this.orderedTiles[tileIndex];
-    const texture = this.distancesAboveMinTextures.get(tile)!;
+  public getDistanceAboveMin(position: PositionOnTile): number {
+    const texture = this.elevationTextures.get(position.tile)!;
 
-    const [x, y] = dataTexCoords;
-    const rect: ScreenRect = { xOffset: x, yOffset: y, width: 1, height: 1 };
+    const [xOffset, yOffset] = position.position;
+    const rect: ScreenRect = { xOffset, yOffset, width: 1, height: 1 };
 
     const bufferInfo = readTexture(this.gl, texture, rect);
 
     return bufferInfo.buffer[0];
   }
 
-  public getUnixSeconds(tileIndex: number, dataTexCoords: Vector2): number {
-    const tile = this.orderedTiles[tileIndex];
-    const texture = this.unixSecondsTextures.get(tile)!;
+  public getUnixSeconds(position: PositionOnTile): number {
+    const texture = this.elevationTextures.get(position.tile)!;
 
-    const [x, y] = dataTexCoords;
-    const rect: ScreenRect = { xOffset: x, yOffset: y, width: 1, height: 1 };
+    const [xOffset, yOffset] = position.position;
+    const rect: ScreenRect = { xOffset, yOffset, width: 1, height: 1 };
 
     const bufferInfo = readTexture(this.gl, texture, rect);
 
@@ -227,7 +232,6 @@ function getLongitudeLines(
 ): TerrainLongitudeLine[] {
   const lines: TerrainLongitudeLine[] = [];
 
-  const elevationTileDimensions = getTileDimensions(elevationFileOriginalDimensions);
   const latitudeRadiansPerPixel = latitudeRadiansPerTile / elevationTileDimensions.height;
   const longitudeRadiansPerPixel = longitudeRadiansPerTile / elevationTileDimensions.width;
 

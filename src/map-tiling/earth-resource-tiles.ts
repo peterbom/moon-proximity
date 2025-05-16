@@ -8,15 +8,18 @@ const horizontalTileCount = 32;
 const verticalTileCount = 16;
 const tileCount = horizontalTileCount * verticalTileCount;
 
-export const colorFileOriginalDimensions: ImageDimensions = {
+const colorFileOriginalDimensions: ImageDimensions = {
   width: 21600,
   height: 10800,
 };
 
-export const elevationFileOriginalDimensions: ImageDimensions = {
+const elevationFileOriginalDimensions: ImageDimensions = {
   width: 21600,
   height: 10800,
 };
+
+export const colorTileDimensions = getTileDimensions(colorFileOriginalDimensions);
+export const elevationTileDimensions = getTileDimensions(elevationFileOriginalDimensions);
 
 export const longitudeRadiansPerTile = (2 * Math.PI) / horizontalTileCount;
 export const latitudeRadiansPerTile = Math.PI / verticalTileCount;
@@ -81,22 +84,18 @@ export function getRectangularTileLayout(groupedOrderedTiles: EarthResourceTile[
   const startLatitudes = [...startLatitudeSet.values()].sort((a, b) => b - a); // sort descending
 
   return {
+    groupedOrderedTiles,
     startLatitudes,
     startLongitudes,
   };
 }
 
 export class ImageElementTileDownloader {
-  protected readonly tileDimensions: ImageDimensions;
-
   constructor(
     private readonly folderPath: string,
     private readonly extension: string,
-    private readonly textureDefinition: TextureDefinition,
-    originalImageDimensions: ImageDimensions
-  ) {
-    this.tileDimensions = getTileDimensions(originalImageDimensions);
-  }
+    private readonly textureDefinition: TextureDefinition
+  ) {}
 
   public async download(
     gl: WebGL2RenderingContext,
@@ -123,7 +122,7 @@ export class ImageElementTileDownloader {
   }
 }
 
-export function getTileDimensions(imageDimensions: ImageDimensions): ImageDimensions {
+function getTileDimensions(imageDimensions: ImageDimensions): ImageDimensions {
   return {
     width: imageDimensions.width / horizontalTileCount,
     height: imageDimensions.height / verticalTileCount,
