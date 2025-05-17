@@ -288,7 +288,7 @@ export function createTerrainShapeData(
 
     const pairwiseMatches = getPairwiseMatches(thisLine.points, nextLine.points, getLateralCorrespondence);
     for (const match of pairwiseMatches) {
-      if (match.indexA < thisLine.points.length && match.indexB < nextLine.points.length) {
+      if (match.indexA < thisLine.points.length - 1 && match.indexB < nextLine.points.length - 1) {
         // Draw two triangles to make a rectangle.
         const thisPoint0 = match.itemA;
         const thisPoint1 = thisLine.points[match.indexA + 1];
@@ -296,14 +296,14 @@ export function createTerrainShapeData(
         const nextPoint1 = nextLine.points[match.indexB + 1];
         const trianglePoints = [thisPoint0, nextPoint1, nextPoint0, thisPoint0, thisPoint1, nextPoint1];
         indices.push(...trianglePoints.map((p) => pointIndexLookup.get(p)!));
-      } else if (match.indexA < thisLine.points.length) {
+      } else if (match.indexA < thisLine.points.length - 1) {
         // Draw one triangle with two points on this line.
         const thisPoint0 = match.itemA;
         const thisPoint1 = thisLine.points[match.indexA + 1];
         const nextPoint0 = match.itemB;
         const trianglePoints = [thisPoint0, thisPoint1, nextPoint0];
         indices.push(...trianglePoints.map((p) => pointIndexLookup.get(p)!));
-      } else if (match.indexB < nextLine.points.length) {
+      } else if (match.indexB < nextLine.points.length - 1) {
         // Draw one triangle with two points on the next line.
         const thisPoint0 = match.itemA;
         const nextPoint0 = match.itemB;

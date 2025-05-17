@@ -403,7 +403,7 @@ function runWithReadyResources(context: MultiViewContext, resources: ReadyResour
     resources.programs.textureAttributeSimpleObjectProgramInfo,
     terrainVao,
     screenRenderTarget,
-    DrawOptions.default()
+    DrawOptions.default().cullFace(false) // TODO: Why is this needed? Triangles seem to be oriented correctly..
   );
 
   sceneRenderer.addSceneObjects(

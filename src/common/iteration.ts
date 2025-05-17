@@ -112,7 +112,7 @@ export function getPairwiseMatches<T>(
       itemB: bestB.item,
     });
 
-    groupBUsage.filter((u) => u.item === bestB).forEach((u) => (u.used = true));
+    groupBUsage.filter((u) => u.item === bestB.item).forEach((u) => (u.used = true));
   }
 
   // All group A items are matched. Now match any missing group B items

@@ -39,8 +39,8 @@ export type TerrainLocation = {
   tile: EarthResourceTile;
 };
 
-const cachedTopCount = 100;
-const meshPointSpacing = 5;
+const cachedTopCount = 500;
+const meshPointSpacing = 50;
 
 export class ProximityTerrainData {
   private readonly longitudeLines: TerrainLongitudeLine[];
