@@ -28,6 +28,7 @@ export type ProgramOutputTextureDefinitions<TTextures extends ProgramOutputTextu
   [name in TextureName<TTextures>]: {
     attachmentIndex: TTextures[name]["attachmentIndex"];
     definition: TextureDefinition;
+    clearColor?: Vector4;
   };
 };
 
@@ -104,7 +105,14 @@ export class FramebufferRenderTarget<TTextures extends ProgramOutputTextureInfos
   ): FramebufferRenderTarget<TColorTextures> {
     const framebuffer = gl.createFramebuffer();
     const infoEntries = Object.entries(programOutputs).map(([name, output]) => {
-      const textureInfo = createColorTexture(gl, framebuffer, output.attachmentIndex, output.definition, dimensions);
+      const textureInfo = createColorTexture(
+        gl,
+        framebuffer,
+        output.attachmentIndex,
+        output.definition,
+        dimensions,
+        output.clearColor
+      );
       return [name, textureInfo];
     });
 
@@ -215,7 +223,7 @@ export class FramebufferRenderTarget<TTextures extends ProgramOutputTextureInfos
     return textureInfo;
   }
 
-  public clear(color: Vector4 = [0, 0, 0, 0]) {
+  public clear() {
     this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.framebuffer);
 
     // Needs to work for different texture types: https://stackoverflow.com/a/75045836
@@ -225,6 +233,7 @@ export class FramebufferRenderTarget<TTextures extends ProgramOutputTextureInfos
     }
 
     Object.values(this.colorTextureInfos).forEach((info) => {
+      const color = info.clearColor || [0, 0, 0, 0];
       if (info.definition.isIntegerFormat()) {
         if (info.definition.isFloatType()) {
           this.gl.clearBufferfv(this.gl.COLOR, info.attachmentIndex, color);
@@ -277,6 +286,7 @@ export type TextureInfo = {
   texture: WebGLTexture;
   attachmentIndex: number;
   renderProperties: TextureRenderProperties;
+  clearColor?: Vector4;
 };
 
 function createDepthTexture(
@@ -306,13 +316,15 @@ function createColorTexture(
   framebuffer: WebGLFramebuffer,
   attachmentIndex: number,
   definition: TextureDefinition,
-  dimensions: RenderDimensions
+  dimensions: RenderDimensions,
+  clearColor?: Vector4
 ): TextureInfo {
   const textureInfo: TextureInfo = {
     definition,
     texture: definition.createImmutable(gl, dimensions),
     attachmentIndex,
     renderProperties: definition.getRenderProperties(),
+    clearColor,
   };
 
   gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);

@@ -130,6 +130,7 @@ function createTileTerrainRenderTargets(
       distanceAboveMin: {
         attachmentIndex: 0,
         definition: new TextureDefinition("R32F").withMagFilter("NEAREST").withMinFilter("NEAREST"),
+        clearColor: [10000, 0, 0, 0],
       },
       unixSeconds: {
         attachmentIndex: 1,

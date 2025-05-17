@@ -198,12 +198,15 @@ function getOrCreateSingleControlElement(controlGroupElem: Element, label: strin
 
 export function getOrCreateAbsolutePositionCanvas(
   canvasPlacementElement: Element,
-  position: StyleRect
+  position: StyleRect,
+  id: { name: string; number: number }
 ): HTMLCanvasElement {
   const relativeContainerElem = getRelativeContainerOrError(canvasPlacementElement);
-  let canvasElem = relativeContainerElem.querySelector(`canvas.${absolute}`) as HTMLCanvasElement;
+  const elemId = `${id.name}${id.number}`;
+  let canvasElem = relativeContainerElem.querySelector(`canvas#${elemId}`) as HTMLCanvasElement;
   if (canvasElem === null) {
     canvasElem = document.createElement("canvas");
+    canvasElem.setAttribute("id", elemId);
     canvasElem.classList.add(absolute);
     relativeContainerElem.appendChild(canvasElem);
   }

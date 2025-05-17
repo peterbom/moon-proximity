@@ -47,39 +47,36 @@ export class ProximityTerrainData {
 
   private readonly mapTiledArea: TiledArea;
   private readonly tileToColorTextureRect = new Map<EarthResourceTile, ScreenRect>();
-  private readonly elevationTextures = new Map<EarthResourceTile, ReadableTexture>();
-  private readonly distancesAboveMinTextures = new Map<EarthResourceTile, ReadableTexture>();
-  private readonly unixSecondsTextures = new Map<EarthResourceTile, ReadableTexture>();
 
   private readonly cachedTopLocations: TerrainLocation[];
 
   constructor(
     private readonly gl: WebGL2RenderingContext,
-    private readonly rectangularTileLayout: RectangularTileLayout,
-    private readonly dataTextureDimensions: ImageDimensions,
+    public readonly rectangularTileLayout: RectangularTileLayout,
+    public readonly dataTextureDimensions: ImageDimensions,
     public readonly colorTexture: ReadableTexture,
     public readonly colorTextureTiledArea: TiledArea,
-    tileOutputTextures: Map<EarthResourceTile, TileOutputTextures>
+    private readonly tileOutputTextures: Map<EarthResourceTile, TileOutputTextures>
   ) {
-    const proximityTextures = new Map<EarthResourceTile, ReadableTexture>();
-    tileOutputTextures.forEach((textures, tile) => {
+    tileOutputTextures.forEach((_textures, tile) => {
       const colorTextureRect = colorTextureTiledArea.getTargetRect(tile);
-      proximityTextures.set(tile, textures.proximities);
       this.tileToColorTextureRect.set(tile, colorTextureRect);
-      this.elevationTextures.set(tile, textures.elevations);
-      this.distancesAboveMinTextures.set(tile, textures.distancesAboveMin);
-      this.unixSecondsTextures.set(tile, textures.unixSeconds);
     });
 
-    this.longitudeLines = getLongitudeLines(gl, rectangularTileLayout.groupedOrderedTiles, proximityTextures);
-
-    // Having used the proximity textures to calculate the longitude lines, they're no longer
-    // required.
-    proximityTextures.forEach((readable) => gl.deleteTexture(readable.texture));
+    this.longitudeLines = getLongitudeLines(gl, rectangularTileLayout.groupedOrderedTiles, this.tileOutputTextures);
 
     this.mapTiledArea = getTiledAreaForMap(dataTextureDimensions, rectangularTileLayout);
 
     this.cachedTopLocations = this.calculateTopClosestPoints(cachedTopCount);
+  }
+
+  public getTextures(tile: EarthResourceTile): TileOutputTextures {
+    const textures = this.tileOutputTextures.get(tile);
+    if (!textures) {
+      throw new Error(`Textures not found for tile ${tile.filenameBase}`);
+    }
+
+    return textures;
   }
 
   public getTopClosestPoints(topCount: number): TerrainLocation[] {
@@ -185,7 +182,7 @@ export class ProximityTerrainData {
   }
 
   public getElevation(position: PositionOnTile): number {
-    const texture = this.elevationTextures.get(position.tile)!;
+    const texture = this.getTextures(position.tile).elevations;
 
     const [xOffset, yOffset] = position.position;
     const rect: ScreenRect = { xOffset, yOffset, width: 1, height: 1 };
@@ -196,7 +193,7 @@ export class ProximityTerrainData {
   }
 
   public getDistanceAboveMin(position: PositionOnTile): number {
-    const texture = this.elevationTextures.get(position.tile)!;
+    const texture = this.getTextures(position.tile).distancesAboveMin;
 
     const [xOffset, yOffset] = position.position;
     const rect: ScreenRect = { xOffset, yOffset, width: 1, height: 1 };
@@ -207,7 +204,7 @@ export class ProximityTerrainData {
   }
 
   public getUnixSeconds(position: PositionOnTile): number {
-    const texture = this.elevationTextures.get(position.tile)!;
+    const texture = this.getTextures(position.tile).unixSeconds;
 
     const [xOffset, yOffset] = position.position;
     const rect: ScreenRect = { xOffset, yOffset, width: 1, height: 1 };
@@ -219,16 +216,19 @@ export class ProximityTerrainData {
 
   public clean() {
     this.gl.deleteTexture(this.colorTexture.texture);
-    this.elevationTextures.forEach((readable) => this.gl.deleteTexture(readable.texture));
-    this.distancesAboveMinTextures.forEach((readable) => this.gl.deleteTexture(readable.texture));
-    this.unixSecondsTextures.forEach((readable) => this.gl.deleteTexture(readable.texture));
+    this.tileOutputTextures.forEach((textures) => {
+      this.gl.deleteTexture(textures.proximities.texture);
+      this.gl.deleteTexture(textures.elevations.texture);
+      this.gl.deleteTexture(textures.distancesAboveMin.texture);
+      this.gl.deleteTexture(textures.unixSeconds.texture);
+    });
   }
 }
 
 function getLongitudeLines(
   gl: WebGL2RenderingContext,
   groupedOrderedTiles: EarthResourceTile[][],
-  tileProximityTextures: Map<EarthResourceTile, ReadableTexture>
+  tileProximityTextures: Map<EarthResourceTile, TileOutputTextures>
 ): TerrainLongitudeLine[] {
   const lines: TerrainLongitudeLine[] = [];
 
@@ -246,7 +246,7 @@ function getLongitudeLines(
   for (const tileGroup of groupedOrderedTiles) {
     // Get all the proximity values for all the tiles at this longitude.
     const valuesForLongitude: SourceLongitudeValues[] = tileGroup.map((tile) => {
-      const proximityTexture = tileProximityTextures.get(tile)!;
+      const proximityTexture = tileProximityTextures.get(tile)!.proximities;
       const bufferInfo = readTexture(gl, proximityTexture, elevationTileRect);
       const data = bufferInfo.buffer as Float32Array; // TODO: Pull type from texture definition?
       return { tile, data, width: elevationTileRect.width, height: elevationTileDimensions.height };

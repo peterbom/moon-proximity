@@ -6,6 +6,17 @@ export function seqStep(from: number, to: number, step: number): number[] {
   return seq(Math.floor((to - from) / step) + 1).map((n) => n * step + from);
 }
 
+export function getRange(values: Iterable<number>): { min: number; max: number } {
+  let min = Infinity;
+  let max = -Infinity;
+  for (const n of values) {
+    min = Math.min(n, min);
+    max = Math.max(n, max);
+  }
+
+  return { min, max };
+}
+
 /**
  * Groups objects with a shared property value, but retains the ordering in the original array
  * (i.e. only groups items that are adjacent).

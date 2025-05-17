@@ -552,12 +552,16 @@ function runWithDate(
     sceneRenderer.render(pixelRect);
 
     if (debugPicking) {
-      const canvasElem = getOrCreateAbsolutePositionCanvas(context.virtualCanvas, {
-        width: context.virtualCanvas.clientWidth,
-        height: context.virtualCanvas.clientHeight,
-        left: 0,
-        top: context.virtualCanvas.clientHeight + 5,
-      });
+      const canvasElem = getOrCreateAbsolutePositionCanvas(
+        context.virtualCanvas,
+        {
+          width: context.virtualCanvas.clientWidth,
+          height: context.virtualCanvas.clientHeight,
+          left: 0,
+          top: context.virtualCanvas.clientHeight + 5,
+        },
+        { name: "earth", number: 1 }
+      );
 
       const coordDomain: [number, number] = [floatToUint16(0), floatToUint16(Math.PI)];
       const coordRange: [number, number] = [0, 255];

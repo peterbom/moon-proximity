@@ -8,7 +8,8 @@ import {
   StyleRect,
 } from "../common/html-utils";
 import { IdGenerator } from "../common/id-generator";
-import { degToRad, radToDeg } from "../common/math";
+import { getRange } from "../common/iteration";
+import { degToRad, makeScale, radToDeg } from "../common/math";
 import { compose4, makeViewProjectionMatrices } from "../common/matrices";
 import type { Vector2, Vector3, Vector4 } from "../common/numeric-types";
 import { addVectors, getSpatialExtent } from "../common/vectors";
@@ -26,7 +27,6 @@ import { ProximityTileCollection } from "../map-tiling/proximity-tile-collection
 import { ProximityTerrainData } from "../proximity-terrain-data";
 import type { State } from "../state-types";
 import { overlay } from "../styles/site.module.css";
-import { createVertexAttribsInfo } from "../webgl/attributes";
 import { addMouseListeners } from "../webgl/canvas-interaction";
 import type { MultiViewContext } from "../webgl/context";
 import type { CanvasCoordinates, ScreenRect } from "../webgl/dimension-types";
@@ -64,6 +64,7 @@ import { drawToCanvas, readTexture } from "../webgl/texture-utils";
 import { UniformContext } from "../webgl/uniforms";
 
 const debugColorTexture = false;
+const debugDataTexturesIndex = 0;
 
 const idGenerator = new IdGenerator(1);
 const cleanup = new Cleanup();
@@ -460,15 +461,55 @@ function runWithReadyResources(context: MultiViewContext, resources: ReadyResour
     if (debugColorTexture) {
       const { width, height } = resources.terrainData.colorTextureTiledArea.targetDimensions;
 
-      const canvasElem = getOrCreateAbsolutePositionCanvas(context.virtualCanvas, {
-        width,
-        height,
-        left: -context.virtualCanvas.clientLeft,
-        top: context.virtualCanvas.clientHeight + 5,
-      });
+      const canvasElem = getOrCreateAbsolutePositionCanvas(
+        context.virtualCanvas,
+        {
+          width,
+          height,
+          left: -context.virtualCanvas.clientLeft,
+          top: context.virtualCanvas.clientHeight + 5,
+        },
+        { name: "mapcolor", number: 1 }
+      );
 
       const readInfo = readTexture(gl, resources.terrainData.colorTexture, { xOffset: 0, yOffset: 0, width, height });
       drawToCanvas(canvasElem, readInfo, false);
+    }
+
+    if (debugDataTexturesIndex >= 0) {
+      const tile = resources.terrainData.rectangularTileLayout.groupedOrderedTiles.flat()[debugDataTexturesIndex];
+
+      const textures = resources.terrainData.getTextures(tile);
+      const { width, height } = resources.terrainData.dataTextureDimensions;
+      const left = 0;
+      [textures.proximities, textures.elevations, textures.distancesAboveMin, textures.unixSeconds].forEach(
+        (texture, i) => {
+          const top =
+            context.virtualCanvas.clientHeight + 5 + (resources.terrainData.dataTextureDimensions.height + 5) * i;
+
+          const rect = { width, height, left, top };
+          const canvasElem = getOrCreateAbsolutePositionCanvas(context.virtualCanvas, rect, {
+            name: "mapdata",
+            number: i,
+          });
+
+          const readInfo = readTexture(gl, texture, { xOffset: 0, yOffset: 0, width, height });
+
+          const { min, max } = getRange(readInfo.buffer);
+
+          const domain: [number, number] = [min, max];
+          const range: [number, number] = [0, 255];
+          const scale = makeScale(domain, range);
+          const adjust = (color: Vector4): Vector4 => {
+            const r = scale(color[0]);
+            const g = scale(color[1]);
+            const b = scale(color[2]);
+            return [r, g, b, 255];
+          };
+
+          drawToCanvas(canvasElem, readInfo, false, adjust);
+        }
+      );
     }
   }
 }
