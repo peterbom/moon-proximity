@@ -4,7 +4,7 @@ import { makeRotationOnAxis } from "./common/matrices";
 import type { Vector2, Vector3, Vector4 } from "./common/numeric-types";
 import { getMagnitude, normalize, subtractVectors } from "./common/vectors";
 import { applyTransformMatrix, asScaleTransform, asXRotation, TransformSeries, TransformType } from "./common/xform";
-import { EarthResourceTile } from "./map-tiling/tile-types";
+import { PositionOnTile } from "./map-tiling/tile-types";
 import { ProximityLine, ProximityPoint } from "./proximity-line";
 import { TerrainLongitudeLine, TerrainLongitudePoint } from "./proximity-terrain-data";
 import {
@@ -256,7 +256,7 @@ export function createProximityShapeData(
 
 export function createTerrainShapeData(
   lines: TerrainLongitudeLine[],
-  getPositions: (tile: EarthResourceTile, tileX: number, tileY: number) => { xy: Vector2; uv: Vector2 }
+  getPositions: (positionOnTile: PositionOnTile) => { xy: Vector2; uv: Vector2 }
 ): ShapeData {
   const positions: Vector3[] = [];
   const normals: Vector3[] = [];
@@ -269,10 +269,11 @@ export function createTerrainShapeData(
     for (const point of line.points) {
       pointIndexLookup.set(point, index);
 
+      const positionOnTile: PositionOnTile = { tile: point.tile, position: [line.x, point.y] };
       const {
         xy: [x, y],
         uv: [u, v],
-      } = getPositions(point.tile, line.x, point.y);
+      } = getPositions(positionOnTile);
       positions.push([x, y, point.value]);
       normals.push([0, 0, 1]); // TODO: https://webgl2fundamentals.org/webgl/lessons/webgl-qna-how-to-import-a-heightmap-in-webgl.html
       colors.push([0, 0, 0, 1]);

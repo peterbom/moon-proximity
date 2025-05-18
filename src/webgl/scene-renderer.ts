@@ -40,11 +40,13 @@ export class SceneRenderer {
       this.gl.scissor(drawingRect.xOffset, drawingRect.yOffset, drawingRect.width, drawingRect.height);
 
       group.drawOptions.setOptions(this.gl);
-      group.sceneObjects.forEach((obj) => {
-        obj.setObjectUniforms();
-        obj.setVao();
-        obj.drawVertices();
-      });
+      group.sceneObjects
+        .filter((obj) => obj.showObject())
+        .forEach((obj) => {
+          obj.setObjectUniforms();
+          obj.setVao();
+          obj.drawVertices();
+        });
 
       this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
     });
@@ -62,6 +64,7 @@ export class SceneRenderer {
       setVao: () => renderer.setVao(vaoInfo),
       setObjectUniforms: () => {},
       drawVertices: () => drawVertices(renderer.gl, vaoInfo),
+      showObject: () => true,
     };
 
     this.sceneObjectGroups.push({
@@ -75,23 +78,30 @@ export class SceneRenderer {
   }
 
   public addSceneObjects<
-    TObj,
+    TUniformObj,
+    TObj extends TUniformObj,
     TContext extends object,
     TAttribValues extends AttribValues,
     TUniformValues extends UniformValues
   >(
     objects: TObj[],
-    uniformCollector: UniformCollector<TUniformValues, Extract<keyof TUniformValues, string>, TContext, TObj>,
+    uniformCollector: UniformCollector<TUniformValues, Extract<keyof TUniformValues, string>, TContext, TUniformObj>,
     programInfo: ProgramInfo<TAttribValues, TUniformValues>,
     vaoInfo: VertexAttribsInfo<TAttribValues>,
     renderTarget: RenderTarget,
-    drawOptions: DrawOptions
+    drawOptions: DrawOptions,
+    showObject: (obj: TObj) => boolean = () => true
   ) {
+    if (objects.length === 0) {
+      return;
+    }
+
     const renderer = this;
     const sceneObjects = objects.map<ObjectRenderInfo>((obj) => ({
       setVao: () => renderer.setVao(vaoInfo),
       setObjectUniforms: () => renderer.setObjectUniforms(programInfo, uniformCollector, obj),
       drawVertices: () => drawVertices(renderer.gl, vaoInfo),
+      showObject: () => showObject(obj),
     }));
 
     this.sceneObjectGroups.push({
@@ -195,6 +205,7 @@ type ObjectRenderInfo = {
   setVao: () => void;
   setObjectUniforms: () => void;
   drawVertices: () => void;
+  showObject: () => boolean;
 };
 
 const drawModeLookup: { [mode in DrawMode]: (gl: WebGL2RenderingContext) => GLenum } = {

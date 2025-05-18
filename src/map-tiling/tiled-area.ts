@@ -40,22 +40,22 @@ export class TiledArea {
   }
 
   public getTargetRect(tile: EarthResourceTile): ScreenRect {
-    const [xOffset, yOffset] = this.getTargetPosition(tile, [0, 0]);
+    const [xOffset, yOffset] = this.getTargetPosition({ tile, position: [0, 0] });
     const { width, height } = this.targetTileDimensions;
 
     return { xOffset, yOffset, width, height };
   }
 
-  public getTargetPosition(tile: EarthResourceTile, positionInTile: Vector2): Vector2 {
-    const tilePosition = this.tileToPosition.get(tile);
+  public getTargetPosition(positionOnTile: PositionOnTile): Vector2 {
+    const tilePosition = this.tileToPosition.get(positionOnTile.tile);
     if (!tilePosition) {
-      throw new Error(`Tile ${tile.filenameBase} not recognized`);
+      throw new Error(`Tile ${positionOnTile.tile.filenameBase} not recognized`);
     }
 
     const [tileX, tileY] = tilePosition;
     const tileDimensions = this.tileDimensions;
     const targetTileDimensions = this.targetTileDimensions;
-    const [x, y] = positionInTile;
+    const [x, y] = positionOnTile.position;
     return [
       (tileX + x / tileDimensions.width) * targetTileDimensions.width,
       (tileY + y / tileDimensions.height) * targetTileDimensions.height,
@@ -109,7 +109,7 @@ export function getTiledAreaForTexture(
 
 export function getTiledAreaForMap(tileDimensions: ImageDimensions, tileLayout: RectangularTileLayout): TiledArea {
   const width = (tileLayout.startLongitudes.length + 1) * longitudeRadiansPerTile;
-  const height = (tileLayout.startLatitudes.length + 1) * latitudeRadiansPerTile;
+  const height = -(tileLayout.startLatitudes.length + 1) * latitudeRadiansPerTile;
 
   return new TiledArea({ width, height }, tileDimensions, tileLayout);
 }

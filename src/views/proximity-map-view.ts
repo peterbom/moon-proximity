@@ -64,7 +64,7 @@ import { drawToCanvas, readTexture } from "../webgl/texture-utils";
 import { UniformContext } from "../webgl/uniforms";
 
 const debugColorTexture = false;
-const debugDataTexturesIndex = 0;
+const debugDataTexturesIndex = -1;
 
 const idGenerator = new IdGenerator(1);
 const cleanup = new Cleanup();
@@ -76,7 +76,7 @@ const viewInfo = {
   cameraDistance: 0.5, // radians, 1 ~= 6378km
   panPosition: [0, 0] as Vector2,
   rotation: 0, // from X axis, around the vertical (Z) axis
-  tiltAngle: degToRad(45), // from vertical
+  tiltAngle: degToRad(0), // from vertical
   heightScaleFactor: trueHeightScaleFactor * 50,
   fieldOfView: degToRad(60),
   nearLimit: 0.001,
@@ -231,21 +231,22 @@ function runWithReadyResources(context: MultiViewContext, resources: ReadyResour
 
   const closestPoints = resources.terrainData.getTopClosestPoints(10);
   const terrainShapeData = resources.terrainData.createShapeData();
-  const terrainSpatialExtent = getSpatialExtent(terrainShapeData.positions);
 
   const terrainObject: CommonSceneObject = {
     id: idGenerator.getNextId(),
     getTransforms: () => [asScaleTransform([1, 1, viewInfo.heightScaleFactor])],
-    show: true,
   };
 
-  const [minX, minY] = terrainSpatialExtent.min;
-  const [maxX, maxY] = terrainSpatialExtent.max;
+  const terrainExtent = resources.terrainData.getTargetExtent();
+  const terrainWidth = terrainExtent.maxX - terrainExtent.minX;
+  const terrainHeight = terrainExtent.maxY - terrainExtent.minY;
   const horizontalPlaneObject: UniformColorSceneObject = {
     id: idGenerator.getNextId(),
     color: [1, 1, 1, 0.2],
-    getTransforms: () => [asScaleTransform([maxX - minX, maxY - minY, 1]), asTranslation([minX, minY, 0])],
-    show: true,
+    getTransforms: () => [
+      asScaleTransform([terrainWidth, terrainHeight, 1]),
+      asTranslation([terrainExtent.minX, terrainExtent.minY, 0]),
+    ],
   };
 
   const lineObjects: UniformColorSceneObject[] = [
@@ -253,31 +254,31 @@ function runWithReadyResources(context: MultiViewContext, resources: ReadyResour
       id: idGenerator.getNextId(),
       getTransforms: () => [asScaleTransform(earthEquatorialRadius * 2)],
       color: [1, 0, 0, 1],
-      show: false,
     },
     {
       id: idGenerator.getNextId(),
       getTransforms: () => [asScaleTransform(earthEquatorialRadius * 2), asZRotation(Math.PI / 2)],
       color: [0, 1, 0, 1],
-      show: false,
     },
     {
       id: idGenerator.getNextId(),
       getTransforms: () => [asScaleTransform(earthEquatorialRadius * 2), asYRotation(-Math.PI / 2)],
       color: [0, 0, 1, 1],
-      show: false,
     },
   ];
 
-  const pinObjects: PinObject[] = closestPoints.map((location, i) => ({
-    id: idGenerator.getNextId(),
-    getTransforms: () => [
-      asScaleTransform(viewInfo.cameraDistance * Math.tan(viewInfo.fieldOfView) * 0.05),
-      asTranslation([location.latLong.long, location.latLong.lat, viewInfo.heightScaleFactor * location.proximity]),
-    ],
-    rank: i + 1,
-    show: true,
-  }));
+  const pinObjects: PinObject[] = closestPoints.map((location, i) => {
+    const [x, y] = resources.terrainData.getTargetPosition(location.positionOnTile);
+    return {
+      id: idGenerator.getNextId(),
+      getTransforms: () => [
+        asScaleTransform(viewInfo.cameraDistance * Math.tan(viewInfo.fieldOfView) * 0.05),
+        asTranslation([x, y, viewInfo.heightScaleFactor * location.proximity]),
+      ],
+      rank: i + 1,
+      show: false,
+    };
+  });
 
   function updateViewRotation(rotation: number) {
     viewInfo.rotation = -rotation;
@@ -378,6 +379,7 @@ function runWithReadyResources(context: MultiViewContext, resources: ReadyResour
   const uniformColorSimpleObjectUniformCollector = uniformContext
     .createCollector<UniformColorSimpleObjectUniformValues, UniformColorSceneObject>()
     .withObjectUniforms(getCommonSceneObjectUniformValues);
+  //.withObjectUniform("u_color", (_, obj) => obj.color);
 
   const terrainObjectUniformCollector = uniformContext
     .createCollector<TextureAttributeSimpleObjectUniformValues, CommonSceneObject>()
@@ -398,16 +400,17 @@ function runWithReadyResources(context: MultiViewContext, resources: ReadyResour
   const sceneRenderer = new SceneRenderer(gl);
 
   sceneRenderer.addSceneObjects(
-    [terrainObject].filter((o) => o.show),
+    [terrainObject],
     terrainObjectUniformCollector,
     resources.programs.textureAttributeSimpleObjectProgramInfo,
     terrainVao,
     screenRenderTarget,
-    DrawOptions.default().cullFace(false) // TODO: Why is this needed? Triangles seem to be oriented correctly..
+    DrawOptions.default(),
+    () => false
   );
 
   sceneRenderer.addSceneObjects(
-    [terrainObject].filter((o) => o.show),
+    [terrainObject],
     terrainPickingUniformCollector,
     resources.programs.pickingProgramInfo,
     terrainCoordPickingVao,
@@ -416,7 +419,7 @@ function runWithReadyResources(context: MultiViewContext, resources: ReadyResour
   );
 
   sceneRenderer.addSceneObjects(
-    [horizontalPlaneObject].filter((o) => o.show),
+    [horizontalPlaneObject],
     uniformColorSimpleObjectUniformCollector,
     resources.programs.uniformColorSimpleObjectProgramInfo,
     resources.vaos.horizontalPlane,
@@ -425,12 +428,13 @@ function runWithReadyResources(context: MultiViewContext, resources: ReadyResour
   );
 
   sceneRenderer.addSceneObjects(
-    lineObjects.filter((o) => o.show),
+    lineObjects,
     uniformColorSimpleObjectUniformCollector,
     resources.programs.uniformColorSimpleObjectProgramInfo,
     resources.vaos.straightLine,
     screenRenderTarget,
-    DrawOptions.default()
+    DrawOptions.default(),
+    () => false
   );
 
   sceneRenderer.addSceneObjects(
@@ -439,7 +443,8 @@ function runWithReadyResources(context: MultiViewContext, resources: ReadyResour
     resources.programs.colorAttributeSimpleObjectProgramInfo,
     resources.vaos.pin,
     screenRenderTarget,
-    DrawOptions.default()
+    DrawOptions.default(),
+    (obj) => obj.rank < viewInfo.pinCount
   );
 
   cleanup.add(addDragHandlers(context.combinedCanvas, context.virtualCanvas, handleMouseDrag));
@@ -527,10 +532,10 @@ function getSceneContext(resources: ReadyResources, pixelRect: ScreenRect): Scen
   const cameraX = cameraPosRadius * rotationX;
   const cameraY = cameraPosRadius * rotationY;
 
-  const minDistanceIndex = resources.proximityShapeData.minDistanceIndex;
-  const minDistanceGeodeticCoords = resources.proximityShapeData.geodeticCoords[minDistanceIndex];
-  const viewXY = addVectors(minDistanceGeodeticCoords, viewInfo.panPosition);
-  const cameraTargetPosition: Vector3 = [...viewXY, 0];
+  const [closestLocation] = resources.terrainData.getTopClosestPoints(1);
+  const initialXY = resources.terrainData.getTargetPosition(closestLocation.positionOnTile);
+  const [viewX, viewY] = addVectors(initialXY, viewInfo.panPosition);
+  const cameraTargetPosition: Vector3 = [viewX, viewY, 0];
   const cameraPosition = addVectors(cameraTargetPosition, [cameraX, cameraY, cameraZ]);
 
   const up: Vector3 = viewInfo.tiltAngle > 0 ? [0, 0, 1] : [-rotationX, -rotationY, 0];
@@ -607,7 +612,6 @@ type SceneContext = {
 };
 
 type CommonSceneObject = ObjectWithId & {
-  show: boolean;
   getTransforms: () => TransformSeries;
 };
 

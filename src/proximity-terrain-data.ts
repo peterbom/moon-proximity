@@ -33,10 +33,9 @@ export type TerrainLongitudePoint = {
 };
 
 export type TerrainLocation = {
-  dataTexCoords: Vector2;
   latLong: { lat: number; long: number };
   proximity: number;
-  tile: EarthResourceTile;
+  positionOnTile: PositionOnTile;
 };
 
 const cachedTopCount = 500;
@@ -96,9 +95,9 @@ export class ProximityTerrainData {
 
     return createTerrainShapeData(linesForMesh, getPositions);
 
-    function getPositions(tile: EarthResourceTile, tileX: number, tileY: number) {
-      const [x, y] = mapTiledArea.getTargetPosition(tile, [tileX, tileY]);
-      const [texX, texY] = textureTiledArea.getTargetPosition(tile, [tileX, tileY]);
+    function getPositions(positionOnTile: PositionOnTile) {
+      const [x, y] = mapTiledArea.getTargetPosition(positionOnTile);
+      const [texX, texY] = textureTiledArea.getTargetPosition(positionOnTile);
       const [u, v] = [texX / targetDimensions.width, texY / targetDimensions.height];
 
       return {
@@ -152,10 +151,13 @@ export class ProximityTerrainData {
         const y = point.y;
         const tile = point.tile;
         if (point.value > threshold) {
-          const dataTexCoords: Vector2 = [x, y];
           const latLong = { lat: point.latitude, long: line.longitude };
           const proximity = point.value;
-          topClosestPoints.push({ dataTexCoords, proximity, tile, latLong });
+          const positionOnTile: PositionOnTile = {
+            position: [x, y],
+            tile,
+          };
+          topClosestPoints.push({ positionOnTile, proximity, latLong });
 
           if (topClosestPoints.length > topCount) {
             const removeAt = maxByProperty(topClosestPoints, (l) => -l.proximity).index;
@@ -170,8 +172,21 @@ export class ProximityTerrainData {
     return topClosestPoints.sort((a, b) => b.proximity - a.proximity);
   }
 
+  public getTargetExtent(): { minX: number; minY: number; maxX: number; maxY: number } {
+    return {
+      minX: 0,
+      maxX: this.mapTiledArea.targetDimensions.width,
+      minY: this.mapTiledArea.targetDimensions.height,
+      maxY: 0,
+    };
+  }
+
   public getTilePositionFromMap(mapPosition: Vector2): PositionOnTile {
     return this.mapTiledArea.getPositionOnTile(mapPosition);
+  }
+
+  public getTargetPosition(positionOnTile: PositionOnTile): Vector2 {
+    return this.mapTiledArea.getTargetPosition(positionOnTile);
   }
 
   public getLatLong(position: PositionOnTile): { long: number; lat: number } {
