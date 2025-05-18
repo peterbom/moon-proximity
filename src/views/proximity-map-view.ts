@@ -12,7 +12,7 @@ import { getRange } from "../common/iteration";
 import { degToRad, makeScale, radToDeg } from "../common/math";
 import { compose4, makeViewProjectionMatrices } from "../common/matrices";
 import type { Vector2, Vector3, Vector4 } from "../common/numeric-types";
-import { addVectors, getSpatialExtent } from "../common/vectors";
+import { addVectors } from "../common/vectors";
 import {
   asScaleTransform,
   asTranslation,
@@ -21,7 +21,7 @@ import {
   getTransformSeriesMatrix,
   TransformSeries,
 } from "../common/xform";
-import { earthEquatorialRadius } from "../constants";
+import { earthEquatorialRadius, highlightClosestKmCount } from "../constants";
 import { createPinShapeData, ProximityShapeData } from "../geo-shape-data";
 import { ProximityTileCollection } from "../map-tiling/proximity-tile-collection";
 import { ProximityTerrainData } from "../proximity-terrain-data";
@@ -69,19 +69,22 @@ const debugDataTexturesIndex = -1;
 const idGenerator = new IdGenerator(1);
 const cleanup = new Cleanup();
 
+const initialCameraDistance = 0.5; // radians, 1 ~= 6378km
+const initialTiltAngle = degToRad(0); // from vertical
 const mPerRadian = earthEquatorialRadius * 1000;
 const trueHeightScaleFactor = 1 / mPerRadian;
 
 const viewInfo = {
-  cameraDistance: 0.5, // radians, 1 ~= 6378km
+  cameraDistance: initialCameraDistance,
   panPosition: [0, 0] as Vector2,
   rotation: 0, // from X axis, around the vertical (Z) axis
-  tiltAngle: degToRad(0), // from vertical
+  tiltAngle: initialTiltAngle,
   heightScaleFactor: trueHeightScaleFactor * 50,
   fieldOfView: degToRad(60),
   nearLimit: 0.001,
   farLimit: 10,
   pinCount: 1,
+  planeProximity: -100,
 };
 
 const straightLineShapeData = createStraightLineShapeData([1, 0, 0]);
@@ -189,6 +192,11 @@ async function runWithNewSelection(context: MultiViewContext, resources: NewSele
   // Every time new data is selected, clean up previous resources.
   cleanup.clean();
 
+  viewInfo.cameraDistance = initialCameraDistance;
+  viewInfo.tiltAngle = initialTiltAngle;
+  viewInfo.rotation = 0;
+  viewInfo.panPosition = [0, 0];
+
   if (resources.proximityShapeData === null) {
     return;
   }
@@ -229,6 +237,14 @@ function runWithReadyResources(context: MultiViewContext, resources: ReadyResour
     max: 10,
   });
 
+  setupSlider(context.virtualCanvas, "plane height (m)", {
+    value: viewInfo.planeProximity,
+    updated: updatePlaneHeight,
+    min: -highlightClosestKmCount * 1000,
+    max: resources.terrainData.getTopClosestPoints(1)[0].proximity,
+    step: 10,
+  });
+
   const closestPoints = resources.terrainData.getTopClosestPoints(10);
   const terrainShapeData = resources.terrainData.createShapeData();
 
@@ -245,7 +261,7 @@ function runWithReadyResources(context: MultiViewContext, resources: ReadyResour
     color: [0.5, 0.5, 0.5, 0.5],
     getTransforms: () => [
       asScaleTransform([terrainWidth, terrainHeight, 1]),
-      asTranslation([terrainExtent.minX, terrainExtent.minY, 0]),
+      asTranslation([terrainExtent.minX, terrainExtent.minY, viewInfo.planeProximity * viewInfo.heightScaleFactor]),
     ],
   };
 
@@ -292,6 +308,11 @@ function runWithReadyResources(context: MultiViewContext, resources: ReadyResour
 
   function updatePinCount(pinCount: number) {
     viewInfo.pinCount = pinCount;
+    context.multiSceneDrawer.requestRedraw(context.virtualCanvas);
+  }
+
+  function updatePlaneHeight(proximity: number) {
+    viewInfo.planeProximity = proximity;
     context.multiSceneDrawer.requestRedraw(context.virtualCanvas);
   }
 
