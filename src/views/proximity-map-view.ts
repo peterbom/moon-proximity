@@ -14,6 +14,7 @@ import { compose4, makeViewProjectionMatrices } from "../common/matrices";
 import type { Vector2, Vector3, Vector4 } from "../common/numeric-types";
 import { addVectors } from "../common/vectors";
 import {
+  applyTransforms,
   asScaleTransform,
   asTranslation,
   asYRotation,
@@ -25,7 +26,7 @@ import { earthEquatorialRadius, highlightClosestKmCount } from "../constants";
 import { createPinShapeData, ProximityShapeData } from "../geo-shape-data";
 import { ProximityTileCollection } from "../map-tiling/proximity-tile-collection";
 import type { PositionOnTile } from "../map-tiling/tile-types";
-import { ProximityTerrainData } from "../proximity-terrain-data";
+import { ProximityTerrainData, TerrainLocation } from "../proximity-terrain-data";
 import type { State, TerrainLocationData } from "../state-types";
 import { overlay } from "../styles/site.module.css";
 import { addMouseListeners } from "../webgl/canvas-interaction";
@@ -192,24 +193,26 @@ async function runWithNewSelection(context: MultiViewContext, state: State, reso
   // Every time new data is selected, clean up previous resources.
   cleanup.clean();
 
-  viewInfo.cameraDistance = initialCameraDistance;
-  viewInfo.tiltAngle = initialTiltAngle;
-  viewInfo.rotation = 0;
-  viewInfo.panPosition = [0, 0];
-
   if (resources.proximityShapeData === null) {
     return;
   }
 
   const proximityShapeData = resources.proximityShapeData;
   const terrainData = await resources.tileCollection.createTerrainData(proximityShapeData);
-
   cleanup.add(terrainData);
+
+  const closestPoint = terrainData.getTopClosestPoints(1)[0];
+
+  viewInfo.cameraDistance = initialCameraDistance;
+  viewInfo.tiltAngle = initialTiltAngle;
+  viewInfo.rotation = 0;
+  viewInfo.panPosition = terrainData.getTargetPosition(closestPoint.positionOnTile);
 
   const readyResources: ReadyResources = {
     ...resources,
     proximityShapeData,
     terrainData,
+    closestPoint,
   };
 
   runWithReadyResources(context, state, readyResources);
@@ -241,7 +244,7 @@ function runWithReadyResources(context: MultiViewContext, state: State, resource
     value: viewInfo.planeProximity,
     updated: updatePlaneHeight,
     min: -highlightClosestKmCount * 1000,
-    max: resources.terrainData.getTopClosestPoints(1)[0].proximity,
+    max: resources.closestPoint.proximity,
     step: 10,
   });
 
@@ -322,14 +325,10 @@ function runWithReadyResources(context: MultiViewContext, state: State, resource
     const [deltaX, deltaY] = dragData.positionDelta;
     const visibleDistancePerClipUnit = viewInfo.cameraDistance * Math.tan(viewInfo.fieldOfView / 2);
 
-    const cosRot = Math.cos(viewInfo.rotation);
-    const sinRot = Math.sin(viewInfo.rotation);
+    const delta: Vector3 = [-deltaX * visibleDistancePerClipUnit, -deltaY * visibleDistancePerClipUnit, 0];
+    const [[panX, panY]] = applyTransforms([asZRotation(viewInfo.rotation)], delta);
 
-    const xShift = -(cosRot * deltaX + sinRot * deltaY) * visibleDistancePerClipUnit;
-    const yShift = -(sinRot * deltaX + cosRot * deltaY) * visibleDistancePerClipUnit;
-
-    const [startX, startY] = viewInfo.panPosition;
-    viewInfo.panPosition = [startX + xShift, startY + yShift];
+    viewInfo.panPosition = addVectors(viewInfo.panPosition, [panX, panY]);
 
     context.multiSceneDrawer.requestRedraw(context.virtualCanvas);
   }
@@ -347,8 +346,13 @@ function runWithReadyResources(context: MultiViewContext, state: State, resource
       return;
     }
 
+    const pinPosition = resources.terrainData.getTargetPosition(pinObject.positionOnTile);
+    viewInfo.panPosition = pinPosition;
+
     const data = getTerrainLocationData(resources, pinObject.positionOnTile);
     state.terrainLocationData.setValue(data);
+
+    context.multiSceneDrawer.requestRedraw(context.virtualCanvas);
   }
 
   function handlePickHover(coords: CanvasCoordinates, result: MousePickResult) {
@@ -573,9 +577,7 @@ function getSceneContext(resources: ReadyResources, pixelRect: ScreenRect): Scen
   const cameraX = cameraPosRadius * rotationX;
   const cameraY = cameraPosRadius * rotationY;
 
-  const [closestLocation] = resources.terrainData.getTopClosestPoints(1);
-  const initialXY = resources.terrainData.getTargetPosition(closestLocation.positionOnTile);
-  const [viewX, viewY] = addVectors(initialXY, viewInfo.panPosition);
+  const [viewX, viewY] = viewInfo.panPosition;
   const cameraTargetPosition: Vector3 = [viewX, viewY, 0];
   const cameraPosition = addVectors(cameraTargetPosition, [cameraX, cameraY, cameraZ]);
 
@@ -637,6 +639,7 @@ type NewSelectionResources = {
 type ReadyResources = NewSelectionResources & {
   proximityShapeData: ProximityShapeData;
   terrainData: ProximityTerrainData;
+  closestPoint: TerrainLocation;
 };
 
 type Overlays = {
