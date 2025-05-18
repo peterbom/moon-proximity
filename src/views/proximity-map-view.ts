@@ -242,7 +242,7 @@ function runWithReadyResources(context: MultiViewContext, resources: ReadyResour
   const terrainHeight = terrainExtent.maxY - terrainExtent.minY;
   const horizontalPlaneObject: UniformColorSceneObject = {
     id: idGenerator.getNextId(),
-    color: [1, 1, 1, 0.2],
+    color: [0.5, 0.5, 0.5, 0.5],
     getTransforms: () => [
       asScaleTransform([terrainWidth, terrainHeight, 1]),
       asTranslation([terrainExtent.minX, terrainExtent.minY, 0]),
@@ -378,8 +378,8 @@ function runWithReadyResources(context: MultiViewContext, resources: ReadyResour
 
   const uniformColorSimpleObjectUniformCollector = uniformContext
     .createCollector<UniformColorSimpleObjectUniformValues, UniformColorSceneObject>()
-    .withObjectUniforms(getCommonSceneObjectUniformValues);
-  //.withObjectUniform("u_color", (_, obj) => obj.color);
+    .withObjectUniforms(getCommonSceneObjectUniformValues)
+    .withObjectUniform("u_color", (_, obj) => obj.color);
 
   const terrainObjectUniformCollector = uniformContext
     .createCollector<TextureAttributeSimpleObjectUniformValues, CommonSceneObject>()
@@ -405,8 +405,7 @@ function runWithReadyResources(context: MultiViewContext, resources: ReadyResour
     resources.programs.textureAttributeSimpleObjectProgramInfo,
     terrainVao,
     screenRenderTarget,
-    DrawOptions.default(),
-    () => false
+    DrawOptions.default()
   );
 
   sceneRenderer.addSceneObjects(
@@ -444,7 +443,7 @@ function runWithReadyResources(context: MultiViewContext, resources: ReadyResour
     resources.vaos.pin,
     screenRenderTarget,
     DrawOptions.default(),
-    (obj) => obj.rank < viewInfo.pinCount
+    (obj) => obj.rank <= viewInfo.pinCount
   );
 
   cleanup.add(addDragHandlers(context.combinedCanvas, context.virtualCanvas, handleMouseDrag));

@@ -1,8 +1,15 @@
 import type { ScreenRect } from "./dimension-types";
 import { DrawOptions } from "./draw-options";
-import type { AttribValues, DrawMode, ProgramInfo, UniformValues, VertexAttribsInfo } from "./program-types";
+import type {
+  AttribValues,
+  DrawMode,
+  ProgramInfo,
+  UniformName,
+  UniformValues,
+  VertexAttribsInfo,
+} from "./program-types";
 import { RenderTarget } from "./render-target";
-import { setUniforms, UniformCollector } from "./uniforms";
+import { CompleteUniformCollector, setUniforms, UniformCollector } from "./uniforms";
 
 export class SceneRenderer {
   private readonly sceneObjectGroups: SceneObjectGroup[] = [];
@@ -85,7 +92,7 @@ export class SceneRenderer {
     TUniformValues extends UniformValues
   >(
     objects: TObj[],
-    uniformCollector: UniformCollector<TUniformValues, Extract<keyof TUniformValues, string>, TContext, TUniformObj>,
+    uniformCollector: CompleteUniformCollector<TUniformValues, TContext, TUniformObj>,
     programInfo: ProgramInfo<TAttribValues, TUniformValues>,
     vaoInfo: VertexAttribsInfo<TAttribValues>,
     renderTarget: RenderTarget,
@@ -151,7 +158,7 @@ export class SceneRenderer {
     TUniformValues extends UniformValues
   >(
     programInfo: ProgramInfo<TAttribValues, TUniformValues>,
-    uniformCollector: UniformCollector<TUniformValues, Extract<keyof TUniformValues, string>, TContext, TObj>
+    uniformCollector: CompleteUniformCollector<TUniformValues, TContext, TObj>
   ) {
     const context = this.lastSceneContext as TContext;
     if (context === null) {
@@ -172,7 +179,7 @@ export class SceneRenderer {
     TUniformValues extends UniformValues
   >(
     programInfo: ProgramInfo<TAttribValues, TUniformValues>,
-    uniformCollector: UniformCollector<TUniformValues, Extract<keyof TUniformValues, string>, TContext, TObj>,
+    uniformCollector: CompleteUniformCollector<TUniformValues, TContext, TObj>,
     obj: TObj
   ) {
     const context = this.lastSceneContext as TContext;

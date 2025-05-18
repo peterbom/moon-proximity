@@ -19,6 +19,24 @@ export class UniformContext<TContext extends object = {}> {
   }
 }
 
+export type UniformCollectionStatus<TValues extends UniformValues, TName extends UniformName<TValues>> = {
+  [name in TName]: true;
+};
+
+export type UniformCollectionComplete<TValues extends UniformValues> = {
+  [name in UniformName<TValues>]: true;
+};
+
+export type CompleteUniformCollector<TValues extends UniformValues, TContext extends object, TObject> = {
+  populated: UniformCollectionComplete<TValues>;
+
+  getContext(rect: ScreenRect): TContext;
+
+  getPerSceneUniforms(ctx: TContext): Partial<TValues>;
+
+  getPerObjectUniforms(ctx: TContext, obj: TObject): Partial<TValues>;
+};
+
 export class UniformCollector<
   TValues extends UniformValues,
   TSupplied extends UniformName<TValues> = never,
@@ -26,6 +44,7 @@ export class UniformCollector<
   TObject = undefined
 > {
   private constructor(
+    public readonly populated: UniformCollectionStatus<TValues, TSupplied>,
     private readonly contextGetter: (rect: ScreenRect) => TContext,
     private readonly perSceneGetter: PerSceneGetter<TValues, TContext>,
     private readonly perObjectGetter: PerObjectGetter<TValues, TContext, TObject>
@@ -35,6 +54,7 @@ export class UniformCollector<
     contextGetter: (rect: ScreenRect) => TContext
   ): UniformCollector<TValues, never, TContext, TObject> {
     return new UniformCollector(
+      {},
       contextGetter,
       () => ({}),
       () => ({})
@@ -45,11 +65,12 @@ export class UniformCollector<
     name: TName,
     getter: (ctx: TContext) => TValues[TName]
   ): UniformCollector<TValues, TSupplied | TName, TContext, TObject> {
+    const populated = { ...this.populated, [name]: true } as UniformCollectionStatus<TValues, TSupplied | TName>;
     const updatedGetter = (ctx: TContext) => ({
       ...this.perSceneGetter(ctx),
       [name]: getter(ctx),
     });
-    return new UniformCollector(this.contextGetter, updatedGetter, this.perObjectGetter);
+    return new UniformCollector(populated, this.contextGetter, updatedGetter, this.perObjectGetter);
   }
 
   public withSceneUniforms<TNames extends UniformName<Omit<TValues, TSupplied>>>(
@@ -57,22 +78,25 @@ export class UniformCollector<
       [TName in TNames]: TValues[TName];
     }
   ): UniformCollector<TValues, TSupplied | TNames, TContext, TObject> {
+    const newPopulated = Object.fromEntries(Object.keys(getter).map((name) => [name, true]));
+    const populated = { ...this.populated, ...newPopulated } as UniformCollectionStatus<TValues, TSupplied | TNames>;
     const updatedGetter = (ctx: TContext) => ({
       ...this.perSceneGetter(ctx),
       ...getter(ctx),
     });
-    return new UniformCollector(this.contextGetter, updatedGetter, this.perObjectGetter);
+    return new UniformCollector(populated, this.contextGetter, updatedGetter, this.perObjectGetter);
   }
 
   public withObjectUniform<TName extends UniformName<Omit<TValues, TSupplied>>>(
     name: TName,
     getter: (ctx: TContext, obj: TObject) => TValues[TName]
   ): UniformCollector<TValues, TSupplied | TName, TContext, TObject> {
+    const populated = { ...this.populated, [name]: true } as UniformCollectionStatus<TValues, TSupplied | TName>;
     const updatedGetter = (ctx: TContext, obj: TObject) => ({
       ...this.perObjectGetter(ctx, obj),
       [name]: getter(ctx, obj),
     });
-    return new UniformCollector(this.contextGetter, this.perSceneGetter, updatedGetter);
+    return new UniformCollector(populated, this.contextGetter, this.perSceneGetter, updatedGetter);
   }
 
   public withObjectUniforms<TNames extends UniformName<Omit<TValues, TSupplied>>>(
@@ -83,11 +107,13 @@ export class UniformCollector<
       [TName in TNames]: TValues[TName];
     }
   ): UniformCollector<TValues, TSupplied | TNames, TContext, TObject> {
+    const newPopulated = Object.fromEntries(Object.keys(getter).map((name) => [name, true]));
+    const populated = { ...this.populated, ...newPopulated } as UniformCollectionStatus<TValues, TSupplied | TNames>;
     const updatedGetter = (ctx: TContext, obj: TObject) => ({
       ...this.perObjectGetter(ctx, obj),
       ...getter(ctx, obj),
     });
-    return new UniformCollector(this.contextGetter, this.perSceneGetter, updatedGetter);
+    return new UniformCollector(populated, this.contextGetter, this.perSceneGetter, updatedGetter);
   }
 
   public getContext(rect: ScreenRect): TContext {
