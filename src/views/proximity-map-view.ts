@@ -70,7 +70,7 @@ const debugDataTexturesIndex = -1;
 const idGenerator = new IdGenerator(1);
 const cleanup = new Cleanup();
 
-const initialCameraDistance = 0.5; // radians, 1 ~= 6378km
+const initialCameraDistance = 500 / earthEquatorialRadius; // radians, 1 ~= 6378km
 const initialTiltAngle = degToRad(0); // from vertical
 const mPerRadian = earthEquatorialRadius * 1000;
 const trueHeightScaleFactor = 1 / mPerRadian;

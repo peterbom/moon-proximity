@@ -108,8 +108,8 @@ export function getTiledAreaForTexture(
 }
 
 export function getTiledAreaForMap(tileDimensions: ImageDimensions, tileLayout: RectangularTileLayout): TiledArea {
-  const width = (tileLayout.startLongitudes.length + 1) * longitudeRadiansPerTile;
-  const height = -(tileLayout.startLatitudes.length + 1) * latitudeRadiansPerTile;
+  const width = tileLayout.startLongitudes.length * longitudeRadiansPerTile;
+  const height = -tileLayout.startLatitudes.length * latitudeRadiansPerTile;
 
   return new TiledArea({ width, height }, tileDimensions, tileLayout);
 }

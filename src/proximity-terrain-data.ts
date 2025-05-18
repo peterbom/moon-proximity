@@ -127,14 +127,14 @@ export class ProximityTerrainData {
     });
 
     function includeLine(line: TerrainLongitudeLine, index: number): boolean {
-      if (index === 0 || index === self.longitudeLines.length) return true;
+      if (index === 0 || index === self.longitudeLines.length - 1) return true;
       if (index % meshPointSpacing === 0) return true;
       if (cachedLongToLat.has(line.longitude)) return true;
       return false;
     }
 
     function includePoint(line: TerrainLongitudeLine, point: TerrainLongitudePoint, index: number): boolean {
-      if (index === 0 || index === line.points.length) return true;
+      if (index === 0 || index === line.points.length - 1) return true;
       if (index % meshPointSpacing === 0) return true;
       const cachedLatValuesForLong = cachedLongToLat.get(line.longitude);
       if (cachedLatValuesForLong !== undefined && cachedLatValuesForLong.has(point.latitude)) return true;
