@@ -24,6 +24,7 @@ import {
 import { earthEquatorialRadius, highlightClosestKmCount } from "../constants";
 import { createPinShapeData, ProximityShapeData } from "../geo-shape-data";
 import { ProximityTileCollection } from "../map-tiling/proximity-tile-collection";
+import type { PositionOnTile } from "../map-tiling/tile-types";
 import { ProximityTerrainData } from "../proximity-terrain-data";
 import type { State } from "../state-types";
 import { overlay } from "../styles/site.module.css";
@@ -33,7 +34,7 @@ import type { CanvasCoordinates, ScreenRect } from "../webgl/dimension-types";
 import { addDragHandlers, DragData } from "../webgl/drag-interaction";
 import { DrawOptions } from "../webgl/draw-options";
 import { createMouseMovePicking, createPickingRenderTarget, MousePickResult } from "../webgl/picking-utils";
-import { ProgramInfo, VertexAttribsInfo } from "../webgl/program-types";
+import type { ProgramInfo, VertexAttribsInfo } from "../webgl/program-types";
 import {
   createPickingProgramInfo,
   createPositionValuePickingVao,
@@ -172,8 +173,7 @@ export async function run(context: MultiViewContext, state: State) {
     },
     programs,
     vaos,
-    coordsPickingRenderTarget: createPickingRenderTarget(gl, "RG16F"),
-    tilePickingRenderTarget: createPickingRenderTarget(gl, "R8"), // TODO: Check <255 values needed
+    positionPickingRenderTarget: createPickingRenderTarget(gl, "RG16F"),
     proximityShapeData,
     tileCollection,
   };
@@ -292,7 +292,7 @@ function runWithReadyResources(context: MultiViewContext, resources: ReadyResour
         asTranslation([x, y, viewInfo.heightScaleFactor * location.proximity]),
       ],
       rank: i + 1,
-      show: false,
+      positionOnTile: location.positionOnTile,
     };
   });
 
@@ -353,7 +353,7 @@ function runWithReadyResources(context: MultiViewContext, resources: ReadyResour
     setAbsoluteStyleRect(resources.overlays.pin.overlay, pinObject !== undefined, styleRect);
 
     if (isTerrainObject) {
-      const [x, y, z] = result.values;
+      const [x, y] = result.values;
       const tilePos = resources.terrainData.getTilePositionFromMap([x, y]);
 
       const { lat, long } = resources.terrainData.getLatLong(tilePos);
@@ -410,11 +410,16 @@ function runWithReadyResources(context: MultiViewContext, resources: ReadyResour
   const terrainPickingUniformCollector = uniformContext
     .createCollector<PickingUniformValues, CommonSceneObject>()
     .withObjectUniforms(getCommonSceneObjectUniformValues)
-    .withObjectUniform("u_id", (_context, obj) => obj.id);
+    .withObjectUniform("u_id", (_, obj) => obj.id);
 
   const colorAttributeSimpleObjectUniformCollector = uniformContext
     .createCollector<ColorAttributeSimpleObjectUniformValues, CommonSceneObject>()
     .withObjectUniforms(getCommonSceneObjectUniformValues);
+
+  const pinPickingUniformCollector = uniformContext
+    .createCollector<PickingUniformValues, CommonSceneObject>()
+    .withObjectUniforms(getCommonSceneObjectUniformValues)
+    .withObjectUniform("u_id", (_, obj) => obj.id);
 
   const screenRenderTarget = new ScreenRenderTarget(gl);
 
@@ -434,7 +439,7 @@ function runWithReadyResources(context: MultiViewContext, resources: ReadyResour
     terrainPickingUniformCollector,
     resources.programs.pickingProgramInfo,
     terrainCoordPickingVao,
-    resources.coordsPickingRenderTarget,
+    resources.positionPickingRenderTarget,
     DrawOptions.default()
   );
 
@@ -467,13 +472,23 @@ function runWithReadyResources(context: MultiViewContext, resources: ReadyResour
     (obj) => obj.rank <= viewInfo.pinCount
   );
 
+  sceneRenderer.addSceneObjects(
+    pinObjects,
+    pinPickingUniformCollector,
+    resources.programs.pickingProgramInfo,
+    resources.vaos.pinPicking,
+    resources.positionPickingRenderTarget,
+    DrawOptions.default(),
+    (obj) => obj.rank <= viewInfo.pinCount
+  );
+
   cleanup.add(addDragHandlers(context.combinedCanvas, context.virtualCanvas, handleMouseDrag));
   cleanup.add(addMouseListeners(context.combinedCanvas, context.virtualCanvas, { scroll: handleZoom }));
   cleanup.add(
     createMouseMovePicking(
       context.combinedCanvas,
       context.virtualCanvas,
-      resources.coordsPickingRenderTarget,
+      resources.positionPickingRenderTarget,
       handleMousePick
     )
   );
@@ -588,8 +603,7 @@ type NewSelectionResources = {
   overlays: Overlays;
   programs: Programs;
   vaos: VaoInfos;
-  coordsPickingRenderTarget: FramebufferRenderTarget<PickingOutputTextureInfos>;
-  tilePickingRenderTarget: FramebufferRenderTarget<PickingOutputTextureInfos>;
+  positionPickingRenderTarget: FramebufferRenderTarget<PickingOutputTextureInfos>;
   tileCollection: ProximityTileCollection;
   proximityShapeData: ProximityShapeData | null;
 };
@@ -640,5 +654,6 @@ type UniformColorSceneObject = CommonSceneObject & {
 };
 
 type PinObject = CommonSceneObject & {
+  positionOnTile: PositionOnTile;
   rank: number;
 };
