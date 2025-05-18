@@ -9,6 +9,7 @@ export type State = {
   perigees: DelayedProperty<Perigee[]>;
   selectedPerigee: NotifiableProperty<Perigee | null>;
   proximityShapeData: NotifiableProperty<ProximityShapeData | null>;
+  terrainLocationData: NotifiableProperty<TerrainLocationData | null>;
 };
 
 export type DatePosition = {
@@ -28,4 +29,13 @@ export type Perigee = {
   angleFromFullMoonDegrees: number;
   isSuperMoon: boolean;
   isSuperNewMoon: boolean;
+};
+
+export type TerrainLocationData = {
+  longitudeDegrees: number;
+  latitudeDegrees: number;
+  altitudeInM: number;
+  distanceToMoonInKm: number;
+  relativeProximityInKm: number;
+  optimalDate: Date;
 };

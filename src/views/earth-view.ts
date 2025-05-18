@@ -538,12 +538,9 @@ function runWithDate(
   cleanup.add(addDragHandlers(context.combinedCanvas, context.virtualCanvas, handleMouseDrag));
   cleanup.add(addMouseListeners(context.combinedCanvas, context.virtualCanvas, { scroll: handleZoom }));
   cleanup.add(
-    createMouseMovePicking(
-      context.combinedCanvas,
-      context.virtualCanvas,
-      viewResources.pickingRenderTarget,
-      handleMousePick
-    )
+    createMouseMovePicking(context.combinedCanvas, context.virtualCanvas, viewResources.pickingRenderTarget, {
+      hover: handleMousePick,
+    })
   );
 
   context.multiSceneDrawer.registerStillDrawer(context.virtualCanvas, drawScene);

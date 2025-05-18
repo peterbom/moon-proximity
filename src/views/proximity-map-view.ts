@@ -26,7 +26,7 @@ import { createPinShapeData, ProximityShapeData } from "../geo-shape-data";
 import { ProximityTileCollection } from "../map-tiling/proximity-tile-collection";
 import type { PositionOnTile } from "../map-tiling/tile-types";
 import { ProximityTerrainData } from "../proximity-terrain-data";
-import type { State } from "../state-types";
+import type { State, TerrainLocationData } from "../state-types";
 import { overlay } from "../styles/site.module.css";
 import { addMouseListeners } from "../webgl/canvas-interaction";
 import type { MultiViewContext } from "../webgl/context";
@@ -179,16 +179,16 @@ export async function run(context: MultiViewContext, state: State) {
   };
 
   state.proximityShapeData.subscribe((shapeData) =>
-    runWithNewSelection(context, {
+    runWithNewSelection(context, state, {
       ...resources,
       proximityShapeData: shapeData,
     })
   );
 
-  runWithNewSelection(context, resources);
+  runWithNewSelection(context, state, resources);
 }
 
-async function runWithNewSelection(context: MultiViewContext, resources: NewSelectionResources) {
+async function runWithNewSelection(context: MultiViewContext, state: State, resources: NewSelectionResources) {
   // Every time new data is selected, clean up previous resources.
   cleanup.clean();
 
@@ -212,10 +212,10 @@ async function runWithNewSelection(context: MultiViewContext, resources: NewSele
     terrainData,
   };
 
-  runWithReadyResources(context, readyResources);
+  runWithReadyResources(context, state, readyResources);
 }
 
-function runWithReadyResources(context: MultiViewContext, resources: ReadyResources) {
+function runWithReadyResources(context: MultiViewContext, state: State, resources: ReadyResources) {
   setupSlider(context.virtualCanvas, "rotation", {
     value: radToDeg(viewInfo.rotation),
     updated: (v) => updateViewRotation(degToRad(v)),
@@ -340,7 +340,18 @@ function runWithReadyResources(context: MultiViewContext, resources: ReadyResour
     context.multiSceneDrawer.requestRedraw(context.virtualCanvas);
   }
 
-  function handleMousePick(coords: CanvasCoordinates, result: MousePickResult) {
+  function handlePickClick(_coords: CanvasCoordinates, result: MousePickResult) {
+    const pinObject = pinObjects.find((p) => p.id === result.id);
+    if (!pinObject) {
+      state.terrainLocationData.setValue(null);
+      return;
+    }
+
+    const data = getTerrainLocationData(resources, pinObject.positionOnTile);
+    state.terrainLocationData.setValue(data);
+  }
+
+  function handlePickHover(coords: CanvasCoordinates, result: MousePickResult) {
     const styleRect: Partial<StyleRect> = {
       left: coords.canvasCssX,
       top: coords.canvasCssY,
@@ -352,27 +363,24 @@ function runWithReadyResources(context: MultiViewContext, resources: ReadyResour
     const pinObject = pinObjects.find((p) => p.id === result.id);
     setAbsoluteStyleRect(resources.overlays.pin.overlay, pinObject !== undefined, styleRect);
 
+    context.virtualCanvas.style.cursor = pinObject ? "pointer" : "default";
+
     if (isTerrainObject) {
       const [x, y] = result.values;
       const tilePos = resources.terrainData.getTilePositionFromMap([x, y]);
 
-      const { lat, long } = resources.terrainData.getLatLong(tilePos);
-      resources.overlays.terrain.content.lat.textContent = radToDeg(lat).toFixed(2);
-      resources.overlays.terrain.content.lon.textContent = radToDeg(long).toFixed(2);
+      const data = getTerrainLocationData(resources, tilePos);
+      resources.overlays.terrain.content.lat.textContent = data.latitudeDegrees.toFixed(2);
+      resources.overlays.terrain.content.lon.textContent = data.longitudeDegrees.toFixed(2);
+      resources.overlays.terrain.content.elev.textContent = data.altitudeInM.toFixed();
+      resources.overlays.terrain.content.dist.textContent = Math.round(data.distanceToMoonInKm).toLocaleString();
 
-      const elev = resources.terrainData.getElevation(tilePos);
-      resources.overlays.terrain.content.elev.textContent = elev.toFixed();
+      const deltaSign = Math.sign(data.relativeProximityInKm) >= 0 ? "+" : "-";
+      resources.overlays.terrain.content.deltaDist.textContent = `${deltaSign}${Math.abs(
+        data.relativeProximityInKm
+      ).toFixed(2)}`;
 
-      // When displaying the overall distance, take elevation data into account (converting from m to km).
-      const distanceAboveMin = resources.terrainData.getDistanceAboveMin(tilePos) - elev / 1000;
-      const distance = resources.proximityShapeData.minDistance + distanceAboveMin;
-      resources.overlays.terrain.content.dist.textContent = Math.round(distance).toLocaleString();
-
-      const deltaSign = Math.sign(distanceAboveMin) >= 0 ? "+" : "-";
-      resources.overlays.terrain.content.deltaDist.textContent = `${deltaSign}${Math.abs(distanceAboveMin).toFixed(2)}`;
-
-      const unixSeconds = resources.terrainData.getUnixSeconds(tilePos);
-      resources.overlays.terrain.content.time.textContent = new Date(unixSeconds * 1000).toISOString();
+      resources.overlays.terrain.content.time.textContent = data.optimalDate.toISOString();
     } else if (pinObject !== undefined) {
       resources.overlays.pin.content.rank.textContent = pinObject.rank.toFixed();
     }
@@ -485,12 +493,10 @@ function runWithReadyResources(context: MultiViewContext, resources: ReadyResour
   cleanup.add(addDragHandlers(context.combinedCanvas, context.virtualCanvas, handleMouseDrag));
   cleanup.add(addMouseListeners(context.combinedCanvas, context.virtualCanvas, { scroll: handleZoom }));
   cleanup.add(
-    createMouseMovePicking(
-      context.combinedCanvas,
-      context.virtualCanvas,
-      resources.positionPickingRenderTarget,
-      handleMousePick
-    )
+    createMouseMovePicking(context.combinedCanvas, context.virtualCanvas, resources.positionPickingRenderTarget, {
+      hover: handlePickHover,
+      click: handlePickClick,
+    })
   );
 
   context.multiSceneDrawer.registerStillDrawer(context.virtualCanvas, drawScene);
@@ -596,6 +602,26 @@ function getCommonSceneObjectUniformValues(
 
   return {
     u_matrix: matrix,
+  };
+}
+
+function getTerrainLocationData(resources: ReadyResources, tilePos: PositionOnTile): TerrainLocationData {
+  const { lat, long } = resources.terrainData.getLatLong(tilePos);
+
+  const longitudeDegrees = radToDeg(long);
+  const latitudeDegrees = radToDeg(lat);
+  const altitudeInM = resources.terrainData.getElevation(tilePos);
+  const relativeProximityInKm = resources.terrainData.getDistanceAboveMin(tilePos) - altitudeInM / 1000;
+  const distanceToMoonInKm = resources.proximityShapeData.minDistance + relativeProximityInKm;
+  const optimalDate = new Date(resources.terrainData.getUnixSeconds(tilePos) * 1000);
+
+  return {
+    longitudeDegrees,
+    latitudeDegrees,
+    altitudeInM,
+    distanceToMoonInKm,
+    relativeProximityInKm,
+    optimalDate,
   };
 }
 
