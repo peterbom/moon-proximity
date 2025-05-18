@@ -9,3 +9,8 @@ export type SphericalCoordinate = {
   theta: number; // zenith relative to positive z (latitude) in radians
   phi: number; // azimuth relative to positive x (longitude) in radians
 };
+
+export type SpatialExtent = {
+  min: Vector3;
+  max: Vector3;
+};

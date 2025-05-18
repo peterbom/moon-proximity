@@ -1,66 +1,87 @@
+import { Cleaner } from "../common/cleanup";
 import type { Vector4 } from "../common/numeric-types";
 import { addMouseListeners, MouseEventListeners } from "./canvas-interaction";
 import type { CanvasCoordinates, ScreenRect } from "./dimension-types";
 import { uint16ToFloat } from "./format-conversion";
+import { PickingOutputTextureInfos } from "./programs/picking";
 import { FramebufferRenderTarget } from "./render-target";
 import { InternalFormat, TextureDefinition } from "./texture-definition";
 
 export function createPickingRenderTarget(
   gl: WebGL2RenderingContext,
   internalFormat: InternalFormat
-): FramebufferRenderTarget {
-  const idTextureDef = new TextureDefinition("R16UI");
-  const valueTextureDef = new TextureDefinition(internalFormat);
-  return FramebufferRenderTarget.createFitToViewport(gl)
-    .withDepthTexture("DEPTH_COMPONENT24")
-    .withColorTexture(0, idTextureDef)
-    .withColorTexture(1, valueTextureDef);
+): FramebufferRenderTarget<PickingOutputTextureInfos> {
+  return FramebufferRenderTarget.createFitToViewport<PickingOutputTextureInfos>(gl, {
+    id: { attachmentIndex: 0, definition: new TextureDefinition("R16UI") },
+    values: { attachmentIndex: 1, definition: new TextureDefinition(internalFormat) },
+  }).withDepthTexture("DEPTH_COMPONENT24");
 }
 
 export type MousePickResult = { id: number; values: Vector4 };
 export type MousePickCallback = (coords: CanvasCoordinates, result: MousePickResult) => void;
 
-export interface MouseMovePickingHandlers {
-  clean(): void;
+export interface PickingEventListeners {
+  hover?: MousePickCallback;
+  click?: MousePickCallback;
 }
 
 export function createMouseMovePicking(
   combinedCanvas: HTMLCanvasElement,
   virtualCanvas: HTMLElement,
-  pickingRenderTarget: FramebufferRenderTarget,
-  callback: MousePickCallback
-): MouseMovePickingHandlers {
+  pickingRenderTarget: FramebufferRenderTarget<PickingOutputTextureInfos>,
+  pickingListeners: PickingEventListeners
+): Cleaner {
   const listeners: MouseEventListeners = {
     move(coords) {
-      if (!pickingRenderTarget.checkFramebufferStatus) {
-        return;
-      }
-
-      const rect: ScreenRect = {
-        xOffset: coords.pixelX,
-        yOffset: coords.pixelY,
-        width: 1,
-        height: 1,
-      };
-
-      const idData = pickingRenderTarget.readColorTexture(0, rect);
-      const valueData = pickingRenderTarget.readColorTexture(1, rect);
-      const values: Vector4 = [0, 0, 0, 0];
-      for (let i = 0; i < valueData.valuesPerPixel; i++) {
-        let componentValue = valueData.buffer[i];
-        if (valueData.type === WebGL2RenderingContext.HALF_FLOAT) {
-          componentValue = uint16ToFloat(componentValue);
+      if (pickingListeners.hover) {
+        const pickingResult = getMousePickResult(coords, pickingRenderTarget);
+        if (pickingResult === null) {
+          return;
         }
 
-        values[i] = componentValue;
+        pickingListeners.hover(coords, pickingResult);
       }
-
-      callback(coords, { id: idData.buffer[0], values });
+    },
+    click(coords) {
+      if (pickingListeners.click) {
+        const pickingResult = getMousePickResult(coords, pickingRenderTarget);
+        if (pickingResult === null) {
+          return;
+        }
+        pickingListeners.click(coords, pickingResult);
+      }
     },
   };
 
-  const mouseHandlers = addMouseListeners(combinedCanvas, virtualCanvas, listeners);
-  return {
-    clean: mouseHandlers.clean,
+  return addMouseListeners(combinedCanvas, virtualCanvas, listeners);
+}
+
+function getMousePickResult(
+  coords: CanvasCoordinates,
+  pickingRenderTarget: FramebufferRenderTarget<PickingOutputTextureInfos>
+): MousePickResult | null {
+  if (!pickingRenderTarget.checkFramebufferStatus(false)) {
+    return null;
+  }
+
+  const rect: ScreenRect = {
+    xOffset: coords.pixelX,
+    yOffset: coords.pixelY,
+    width: 1,
+    height: 1,
   };
+
+  const idData = pickingRenderTarget.readColorTexture("id", rect);
+  const valueData = pickingRenderTarget.readColorTexture("values", rect);
+  const values: Vector4 = [0, 0, 0, 0];
+  for (let i = 0; i < valueData.valuesPerPixel; i++) {
+    let componentValue = valueData.buffer[i];
+    if (valueData.type === WebGL2RenderingContext.HALF_FLOAT) {
+      componentValue = uint16ToFloat(componentValue);
+    }
+
+    values[i] = componentValue;
+  }
+
+  return { id: idData.buffer[0], values };
 }

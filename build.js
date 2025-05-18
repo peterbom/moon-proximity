@@ -4,11 +4,13 @@ const args = process.argv.slice(2);
 const isDev = args.length > 0 && args[0] === "dev";
 
 const sharedConfig = {
-  entryPoints: ["src/index.ts", "src/index.html", "src/resources/*"],
+  entryPoints: ["src/index.ts", "src/index.html", "src/resources/**/*"],
   loader: {
     ".html": "copy",
     ".dat": "copy",
     ".jpg": "copy",
+    ".png": "copy",
+    ".md": "empty",
   },
   bundle: true,
   sourcemap: true,

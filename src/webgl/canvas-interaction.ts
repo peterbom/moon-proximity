@@ -3,10 +3,12 @@ import type { CanvasCoordinates, CanvasViewportDimensions, ScreenRect } from "./
 
 export type MoveHandler = (coords: CanvasCoordinates) => void;
 export type ScrollHandler = (coords: CanvasCoordinates, delta: number) => void;
+export type ClickHandler = (coords: CanvasCoordinates) => void;
 
 export interface MouseEventListeners {
   move?: MoveHandler;
   scroll?: ScrollHandler;
+  click?: ClickHandler;
 }
 
 export function addMouseListeners(
@@ -16,6 +18,7 @@ export function addMouseListeners(
 ): Cleaner {
   const moveHandler = listeners.move;
   const scrollHandler = listeners.scroll;
+  const clickHandler = listeners.click;
 
   const cleaners: (() => void)[] = [];
   if (moveHandler) {
@@ -28,6 +31,12 @@ export function addMouseListeners(
     const listener = (e: WheelEvent) => handleScroll(e, combinedCanvas, virtualCanvas, scrollHandler);
     virtualCanvas.addEventListener("wheel", listener, false);
     cleaners.push(() => virtualCanvas.removeEventListener("wheel", listener, false));
+  }
+
+  if (clickHandler) {
+    const listener = (e: MouseEvent) => handleMouseClick(e, combinedCanvas, virtualCanvas, clickHandler);
+    virtualCanvas.addEventListener("click", listener, false);
+    cleaners.push(() => virtualCanvas.removeEventListener("click", listener, false));
   }
 
   return {
@@ -59,6 +68,18 @@ export function addMouseListeners(
       handler(coordinates, e.deltaY);
     }
     e.preventDefault();
+  }
+
+  function handleMouseClick(
+    e: MouseEvent,
+    combinedCanvas: HTMLCanvasElement,
+    virtualCanvas: HTMLElement,
+    handler: ClickHandler
+  ) {
+    const coordinates = makeCanvasCoordinates(e, getCanvasViewportDimensions(combinedCanvas, virtualCanvas));
+    if (coordinates.withinGLViewport) {
+      handler(coordinates);
+    }
   }
 }
 

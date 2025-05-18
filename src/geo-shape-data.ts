@@ -1,10 +1,18 @@
 import { getGeodeticCoordinates } from "./calculations";
-import { seq } from "./common/iteration";
+import { getPairwiseMatches, seq } from "./common/iteration";
 import { makeRotationOnAxis } from "./common/matrices";
 import type { Vector2, Vector3, Vector4 } from "./common/numeric-types";
 import { getMagnitude, normalize, subtractVectors } from "./common/vectors";
-import { applyTransformMatrix } from "./common/xform";
+import { applyTransformMatrix, asScaleTransform, asXRotation, TransformSeries, TransformType } from "./common/xform";
+import { PositionOnTile } from "./map-tiling/tile-types";
 import { ProximityLine, ProximityPoint } from "./proximity-line";
+import { TerrainLongitudeLine, TerrainLongitudePoint } from "./proximity-terrain-data";
+import {
+  createCylinderShapeData,
+  createSphereShapeData,
+  createTruncatedConeShapeData,
+  transformShapeData,
+} from "./webgl/shape-generation";
 import type { ShapeData } from "./webgl/shape-types";
 
 export type ProximityShapeData = ShapeData & {
@@ -245,3 +253,183 @@ export function createProximityShapeData(
     };
   }
 }
+
+export function createTerrainShapeData(
+  lines: TerrainLongitudeLine[],
+  getPositions: (positionOnTile: PositionOnTile) => { xy: Vector2; uv: Vector2 }
+): ShapeData {
+  const positions: Vector3[] = [];
+  const normals: Vector3[] = [];
+  const colors: Vector4[] = [];
+  const texCoords: Vector2[] = [];
+
+  const pointIndexLookup = new Map<TerrainLongitudePoint, number>();
+  let index = 0;
+  for (const line of lines) {
+    for (const point of line.points) {
+      pointIndexLookup.set(point, index);
+
+      const positionOnTile: PositionOnTile = { tile: point.tile, position: [line.x, point.y] };
+      const {
+        xy: [x, y],
+        uv: [u, v],
+      } = getPositions(positionOnTile);
+      positions.push([x, y, point.value]);
+      normals.push([0, 0, 1]); // TODO: https://webgl2fundamentals.org/webgl/lessons/webgl-qna-how-to-import-a-heightmap-in-webgl.html
+      colors.push([0, 0, 0, 1]);
+      texCoords.push([u, v]);
+      index++;
+    }
+  }
+
+  const indices: number[] = [];
+  for (let x = 0; x < lines.length - 1; x++) {
+    const thisLine = lines[x];
+    const nextLine = lines[x + 1];
+
+    const pairwiseMatches = getPairwiseMatches(thisLine.points, nextLine.points, getLateralCorrespondence);
+    for (const match of pairwiseMatches) {
+      if (match.indexA < thisLine.points.length - 1 && match.indexB < nextLine.points.length - 1) {
+        // Draw two triangles to make a rectangle.
+        const thisPoint0 = match.itemA;
+        const thisPoint1 = thisLine.points[match.indexA + 1];
+        const nextPoint0 = match.itemB;
+        const nextPoint1 = nextLine.points[match.indexB + 1];
+        const trianglePoints = [thisPoint0, nextPoint1, nextPoint0, thisPoint0, thisPoint1, nextPoint1];
+        indices.push(...trianglePoints.map((p) => pointIndexLookup.get(p)!));
+      } else if (match.indexA < thisLine.points.length - 1) {
+        // Draw one triangle with two points on this line.
+        const thisPoint0 = match.itemA;
+        const thisPoint1 = thisLine.points[match.indexA + 1];
+        const nextPoint0 = match.itemB;
+        const trianglePoints = [thisPoint0, thisPoint1, nextPoint0];
+        indices.push(...trianglePoints.map((p) => pointIndexLookup.get(p)!));
+      } else if (match.indexB < nextLine.points.length - 1) {
+        // Draw one triangle with two points on the next line.
+        const thisPoint0 = match.itemA;
+        const nextPoint0 = match.itemB;
+        const nextPoint1 = nextLine.points[match.indexB + 1];
+        const trianglePoints = [thisPoint0, nextPoint1, nextPoint0];
+        indices.push(...trianglePoints.map((p) => pointIndexLookup.get(p)!));
+      }
+    }
+  }
+
+  return {
+    positions,
+    normals,
+    colors,
+    texCoords,
+    drawMode: "Triangles",
+    indices,
+  };
+
+  function getLateralCorrespondence(pointA: TerrainLongitudePoint, pointB: TerrainLongitudePoint): number {
+    // Smaller difference in latitude => higher correspondence.
+    return 1 / Math.abs(pointA.latitude - pointB.latitude);
+  }
+}
+
+export function createPinShapeData(headColor: Vector3, pinColor: Vector3): ShapeData {
+  const headSphereRadius = 6;
+  const pinCylinderLength = 12;
+  const pinRadius = 1;
+  const pointLength = 6;
+  const totalHeight = pointLength + pinCylinderLength + headSphereRadius * 2;
+
+  const headSphereSegmentCount = 12;
+  const headSphereSliceCount = 8;
+  const pinRadialDivisions = 6;
+  const pinLengthDivisions = 2;
+
+  const pinCylinderZOffset = pointLength;
+  const headSphereZOffset = pinCylinderZOffset + pinCylinderLength + headSphereRadius;
+
+  const rotateToZ = asXRotation(Math.PI / 2);
+  const scaleTransform = asScaleTransform(1 / totalHeight);
+  const pointConeTransforms: TransformSeries = [rotateToZ, scaleTransform];
+  const pinCylinderTransforms: TransformSeries = [
+    rotateToZ,
+    { type: TransformType.Translation, value: [0, 0, pinCylinderZOffset] },
+    scaleTransform,
+  ];
+  const headSphereTransforms: TransformSeries = [
+    { type: TransformType.Translation, value: [0, 0, headSphereZOffset] },
+    scaleTransform,
+  ];
+
+  const headSphereShapeData = transformShapeData(
+    createSphereShapeData(headSphereRadius, headSphereSegmentCount, headSphereSliceCount, {
+      baseColor: headColor,
+    }),
+    headSphereTransforms
+  );
+
+  const pinCylinderShapeData = transformShapeData(
+    createCylinderShapeData({
+      capEnds: true,
+      color: [...pinColor, 1],
+      length: pinCylinderLength,
+      lengthDivisions: pinLengthDivisions,
+      radialDivisions: pinRadialDivisions,
+      radius: pinRadius,
+    }),
+    pinCylinderTransforms
+  );
+
+  const pointConeShapeData = transformShapeData(
+    createTruncatedConeShapeData(0, pinRadius, pointLength, pinRadialDivisions, pinLengthDivisions, {
+      bottomCap: false,
+      topCap: false,
+      color: pinColor,
+    }),
+    pointConeTransforms
+  );
+
+  const parts = [headSphereShapeData, pinCylinderShapeData, pointConeShapeData];
+  return parts.reduce(combineShapeData);
+}
+
+export function combineShapeData(shape1: ShapeData, shape2: ShapeData): ShapeData {
+  if (shape1.drawMode !== shape2.drawMode) {
+    throw new Error("shapes have different draw modes");
+  }
+
+  const drawMode = shape1.drawMode;
+
+  if (shape1.indices === null && shape2.indices === null) {
+    return {
+      positions: [...shape1.positions, ...shape2.positions],
+      normals: [...shape1.normals, ...shape2.normals],
+      colors: [...shape1.colors, ...shape2.colors],
+      texCoords: [...shape1.texCoords, ...shape2.texCoords],
+      drawMode,
+      indices: null,
+    };
+  }
+
+  // If one shape has indices and the other doesn't, we have two options:
+  // 1. Copy/duplicate the vertex data for the shape that has indices, and remove the indices
+  // 2. Generate indices for the shape that doesn't.
+  // The second option is easier so we'll do that for now. TODO: revisit this.
+  const [indexedShape1, indexedShape2]: NonNullableShapeData[] = [shape1, shape2].map<NonNullableShapeData>((shape) => {
+    if (shape.indices !== null) {
+      return shape as NonNullableShapeData;
+    }
+
+    return { ...shape, indices: seq(shape.positions.length) };
+  });
+
+  return {
+    positions: [...shape1.positions, ...shape2.positions],
+    normals: [...shape1.normals, ...shape2.normals],
+    colors: [...shape1.colors, ...shape2.colors],
+    texCoords: [...shape1.texCoords, ...shape2.texCoords],
+    drawMode,
+    indices: [...indexedShape1.indices, ...indexedShape2.indices.map((idx) => idx + shape1.positions.length)],
+  };
+}
+
+type NonNullableShapeData = {
+  [P in keyof ShapeData]: NonNullable<ShapeData[P]>;
+};

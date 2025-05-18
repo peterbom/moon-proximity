@@ -57,6 +57,10 @@ const fragmentShaderSrcTemplate = /*glsl*/ `#version 300 es
   }
 `;
 
+export type SimpleObjectOutputTextureInfos = {
+  color: { attachmentIndex: 0; numComponents: 4 };
+};
+
 export type CommonSimpleObjectAttribValues = {
   a_position: (Vector2 | Vector3 | Vector4)[];
 };
@@ -210,5 +214,90 @@ export function createUniformColorSimpleObjectVao<TShapeData extends ShapeData>(
     attribsInfo,
     drawMode: shapeData.drawMode,
     indices: shapeData.indices,
+  });
+}
+
+export function createColorAttributeFullViewportVao(
+  gl: WebGL2RenderingContext,
+  attribSetters: AttribSetters<ColorAttributeSimpleObjectAttribValues>,
+  topLeftColor: Vector4,
+  topRightColor: Vector4,
+  bottomLeftColor: Vector4,
+  bottomRightColor: Vector4
+) {
+  return createVertexAttribsInfo(gl, attribSetters, {
+    attribsInfo: {
+      a_position: {
+        type: gl.FLOAT,
+        data: [
+          [-1, 1],
+          [-1, -1],
+          [1, -1],
+          [-1, 1],
+          [1, -1],
+          [1, 1],
+        ],
+      },
+      a_color: {
+        type: gl.FLOAT,
+        data: [topLeftColor, bottomLeftColor, bottomRightColor, topLeftColor, bottomRightColor, topRightColor],
+      },
+    },
+    indices: null,
+  });
+}
+
+export function createTextureAttributeFullViewportVao(
+  gl: WebGL2RenderingContext,
+  attribSetters: AttribSetters<TextureAttributeSimpleObjectAttribValues>
+) {
+  return createVertexAttribsInfo(gl, attribSetters, {
+    attribsInfo: {
+      a_position: {
+        type: gl.FLOAT,
+        data: [
+          [-1, 1],
+          [-1, -1],
+          [1, -1],
+          [-1, 1],
+          [1, -1],
+          [1, 1],
+        ],
+      },
+      a_texcoord: {
+        type: gl.FLOAT,
+        data: [
+          [0, 1],
+          [0, 0],
+          [1, 0],
+          [0, 1],
+          [1, 0],
+          [1, 1],
+        ],
+      },
+    },
+    indices: null,
+  });
+}
+
+export function createUniformColorFullViewportVao(
+  gl: WebGL2RenderingContext,
+  attribSetters: AttribSetters<UniformColorSimpleObjectAttribValues>
+) {
+  return createVertexAttribsInfo(gl, attribSetters, {
+    attribsInfo: {
+      a_position: {
+        type: gl.FLOAT,
+        data: [
+          [-1, 1],
+          [-1, -1],
+          [1, -1],
+          [-1, 1],
+          [1, -1],
+          [1, 1],
+        ],
+      },
+    },
+    indices: null,
   });
 }

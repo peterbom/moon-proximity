@@ -1,7 +1,9 @@
 import type { Vector2, Vector3, Vector4 } from "../../common/numeric-types";
 import { PlaceholderReplacements, replacePlaceholders } from "../../common/text-utils";
-import type { ProgramInfo } from "../program-types";
+import { createVertexAttribsInfo } from "../attributes";
+import type { AttribSetters, ProgramInfo, VertexAttribsInfo } from "../program-types";
 import { createProgramInfo } from "../programs";
+import type { ShapeData } from "../shape-types";
 
 const flatValuePlaceholder = "FLAT_VALUE";
 
@@ -19,10 +21,10 @@ void main() {
 }
 `;
 
-const fragmentShaderSrc = /*glsl*/ `#version 300 es
+const fragmentShaderSrcTemplate = /*glsl*/ `#version 300 es
 precision highp float;
 
-in vec4 v_values;
+{{${flatValuePlaceholder}}} in vec4 v_values;
 
 uniform uint u_id;
 
@@ -34,6 +36,11 @@ void main() {
   outValues = v_values;
 }
 `;
+
+export type PickingOutputTextureInfos = {
+  id: { attachmentIndex: 0; numComponents: 1 };
+  values: { attachmentIndex: 1; numComponents: 4 };
+};
 
 export type PickingAttribValues = {
   a_position: (Vector2 | Vector3 | Vector4)[];
@@ -54,5 +61,20 @@ export function createPickingProgramInfo(
   };
 
   const vertexShaderSrc = replacePlaceholders(vertexShaderSrcTemplate, substitutions);
+  const fragmentShaderSrc = replacePlaceholders(fragmentShaderSrcTemplate, substitutions);
   return createProgramInfo(gl, vertexShaderSrc, fragmentShaderSrc);
+}
+
+export function createPositionValuePickingVao<TShapeData extends ShapeData>(
+  gl: WebGL2RenderingContext,
+  attribSetters: AttribSetters<PickingAttribValues>,
+  shapeData: TShapeData
+): VertexAttribsInfo<PickingAttribValues> {
+  return createVertexAttribsInfo(gl, attribSetters, {
+    attribsInfo: {
+      a_position: { type: gl.FLOAT, data: shapeData.positions },
+      a_values: { type: gl.FLOAT, data: shapeData.positions },
+    },
+    indices: shapeData.indices,
+  });
 }

@@ -11,6 +11,8 @@ const internalFormatValues = {
     format: WebGL2RenderingContext.RED,
     type: WebGL2RenderingContext.UNSIGNED_BYTE,
     valuesPerPixel: 1,
+    readFormat: WebGL2RenderingContext.RED,
+    readValuesPerPixel: 1,
   },
   R16F: {
     value: WebGL2RenderingContext.R16F,
@@ -18,6 +20,8 @@ const internalFormatValues = {
     format: WebGL2RenderingContext.RED,
     type: WebGL2RenderingContext.HALF_FLOAT,
     valuesPerPixel: 1,
+    readFormat: WebGL2RenderingContext.RED,
+    readValuesPerPixel: 1,
   },
   R16UI: {
     value: WebGL2RenderingContext.R16UI,
@@ -25,20 +29,26 @@ const internalFormatValues = {
     format: WebGL2RenderingContext.RED_INTEGER,
     type: WebGL2RenderingContext.UNSIGNED_SHORT,
     valuesPerPixel: 1,
+    readFormat: WebGL2RenderingContext.RED_INTEGER,
+    readValuesPerPixel: 1,
   },
   R32F: {
     value: WebGL2RenderingContext.R32F,
-    arrayBufferCtor: Uint16Array,
+    arrayBufferCtor: Float32Array,
     format: WebGL2RenderingContext.RED,
     type: WebGL2RenderingContext.FLOAT,
     valuesPerPixel: 1,
+    readFormat: WebGL2RenderingContext.RED,
+    readValuesPerPixel: 1,
   },
   RG16F: {
     value: WebGL2RenderingContext.RG16F,
     arrayBufferCtor: Uint16Array,
     format: WebGL2RenderingContext.RG,
-    type: WebGL2RenderingContext.FLOAT,
+    type: WebGL2RenderingContext.HALF_FLOAT,
     valuesPerPixel: 2,
+    readFormat: WebGL2RenderingContext.RG,
+    readValuesPerPixel: 2,
   },
   RG32F: {
     value: WebGL2RenderingContext.RG32F,
@@ -46,6 +56,8 @@ const internalFormatValues = {
     format: WebGL2RenderingContext.RG,
     type: WebGL2RenderingContext.FLOAT,
     valuesPerPixel: 2,
+    readFormat: WebGL2RenderingContext.RG,
+    readValuesPerPixel: 2,
   },
   RGB8: {
     value: WebGL2RenderingContext.RGB8,
@@ -53,6 +65,8 @@ const internalFormatValues = {
     format: WebGL2RenderingContext.RGB,
     type: WebGL2RenderingContext.UNSIGNED_BYTE,
     valuesPerPixel: 3,
+    readFormat: WebGL2RenderingContext.RGBA,
+    readValuesPerPixel: 4,
   },
   RGBA8: {
     value: WebGL2RenderingContext.RGBA8,
@@ -60,6 +74,8 @@ const internalFormatValues = {
     format: WebGL2RenderingContext.RGBA,
     type: WebGL2RenderingContext.UNSIGNED_BYTE,
     valuesPerPixel: 4,
+    readFormat: WebGL2RenderingContext.RGBA,
+    readValuesPerPixel: 4,
   },
   RGBA16F: {
     value: WebGL2RenderingContext.RGBA16F,
@@ -67,6 +83,8 @@ const internalFormatValues = {
     format: WebGL2RenderingContext.RGBA,
     type: WebGL2RenderingContext.HALF_FLOAT,
     valuesPerPixel: 4,
+    readFormat: WebGL2RenderingContext.RGBA,
+    readValuesPerPixel: 4,
   },
   RGBA32F: {
     value: WebGL2RenderingContext.RGBA32F,
@@ -74,6 +92,8 @@ const internalFormatValues = {
     format: WebGL2RenderingContext.RGBA,
     type: WebGL2RenderingContext.FLOAT,
     valuesPerPixel: 4,
+    readFormat: WebGL2RenderingContext.RGBA,
+    readValuesPerPixel: 4,
   },
   DEPTH_COMPONENT16: {
     value: WebGL2RenderingContext.DEPTH_COMPONENT16,
@@ -81,6 +101,8 @@ const internalFormatValues = {
     format: WebGL2RenderingContext.DEPTH_COMPONENT,
     type: WebGL2RenderingContext.UNSIGNED_SHORT,
     valuesPerPixel: 1,
+    readFormat: WebGL2RenderingContext.DEPTH_COMPONENT,
+    readValuesPerPixel: 1,
   },
   DEPTH_COMPONENT24: {
     value: WebGL2RenderingContext.DEPTH_COMPONENT24,
@@ -88,10 +110,19 @@ const internalFormatValues = {
     format: WebGL2RenderingContext.DEPTH_COMPONENT,
     type: WebGL2RenderingContext.UNSIGNED_INT,
     valuesPerPixel: 1,
+    readFormat: WebGL2RenderingContext.DEPTH_COMPONENT,
+    readValuesPerPixel: 1,
   },
 } as const;
 
 export type InternalFormat = Extract<keyof typeof internalFormatValues, string>;
+
+const integerFormats: number[] = [
+  WebGL2RenderingContext.RED_INTEGER,
+  WebGL2RenderingContext.RG_INTEGER,
+  WebGL2RenderingContext.RGB_INTEGER,
+  WebGL2RenderingContext.RGBA_INTEGER,
+];
 
 const floatTypes: number[] = [WebGL2RenderingContext.FLOAT, WebGL2RenderingContext.HALF_FLOAT];
 const unsignedIntTypes: number[] = [
@@ -123,6 +154,7 @@ type TextureProperties = {
   internalFormat: InternalFormat;
   magFilter: MagFilter;
   minFilter: MinFilter;
+  createMipmap: boolean;
 };
 
 export class TextureDefinition {
@@ -133,6 +165,7 @@ export class TextureDefinition {
       internalFormat,
       minFilter: "LINEAR",
       magFilter: "LINEAR",
+      createMipmap: false,
     };
   }
 
@@ -144,6 +177,8 @@ export class TextureDefinition {
       format: values.format,
       type: values.type,
       valuesPerPixel: values.valuesPerPixel,
+      readFormat: values.readFormat,
+      readValuesPerPixel: values.readValuesPerPixel,
     };
   }
 
@@ -157,6 +192,11 @@ export class TextureDefinition {
     return this;
   }
 
+  public withMipmap(createMipmap: boolean): TextureDefinition {
+    this.properties.createMipmap = createMipmap;
+    return this;
+  }
+
   public updateFromImage(gl: WebGL2RenderingContext, texture: WebGLTexture, image: TexImageSource) {
     const internalFormatValue = internalFormatValues[this.properties.internalFormat].value;
     const formatValue = internalFormatValues[this.properties.internalFormat].format;
@@ -164,6 +204,10 @@ export class TextureDefinition {
 
     gl.bindTexture(gl.TEXTURE_2D, texture);
     gl.texImage2D(gl.TEXTURE_2D, 0, internalFormatValue, formatValue, type, image);
+    if (this.properties.createMipmap) {
+      gl.generateMipmap(gl.TEXTURE_2D);
+    }
+
     gl.bindTexture(gl.TEXTURE_2D, null);
   }
 
@@ -192,31 +236,41 @@ export class TextureDefinition {
     const texture = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, texture);
     this.setParameters(gl);
-    gl.texStorage2D(gl.TEXTURE_2D, 1, internalFormatValue, dimensions.width, dimensions.height);
+    const mipmapLevelCount = this.getMipmapLevelCount(dimensions);
+    gl.texStorage2D(gl.TEXTURE_2D, mipmapLevelCount, internalFormatValue, dimensions.width, dimensions.height);
     gl.bindTexture(gl.TEXTURE_2D, null);
     return texture;
   }
 
-  public isFloat() {
+  public getMipmapLevelCount(dimensions: RenderDimensions) {
+    return this.properties.createMipmap ? Math.floor(Math.log2(Math.min(dimensions.width, dimensions.height))) + 1 : 1;
+  }
+
+  public isIntegerFormat() {
+    return integerFormats.includes(internalFormatValues[this.properties.internalFormat].format);
+  }
+
+  public isFloatType() {
     return floatTypes.includes(internalFormatValues[this.properties.internalFormat].type);
   }
 
-  public isInt() {
+  public isIntType() {
     return intTypes.includes(internalFormatValues[this.properties.internalFormat].type);
   }
 
-  public isUnsignedInt() {
+  public isUnsignedIntType() {
     return unsignedIntTypes.includes(internalFormatValues[this.properties.internalFormat].type);
   }
 
   private getExtensions(gl: WebGL2RenderingContext) {
-    if (this.isFloat()) {
+    if (this.isFloatType()) {
       // Needed to render floats to the color buffer.
       gl.getExtension("EXT_color_buffer_float");
     }
   }
 
   private setParameters(gl: WebGL2RenderingContext) {
+    gl.pixelStorei(gl.PACK_ALIGNMENT, 1);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, magFilterValues[this.properties.magFilter]);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, minFilterValues[this.properties.minFilter]);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); // TODO: Make configurable
@@ -224,13 +278,16 @@ export class TextureDefinition {
   }
 
   public createReadBuffer(rect: ScreenRect): TextureReadBufferInfo {
+    const { width, height } = rect;
     const formatInfo = internalFormatValues[this.properties.internalFormat];
-    const dataLength = rect.width * rect.height * formatInfo.valuesPerPixel;
+    const dataLength = width * height * formatInfo.readValuesPerPixel;
+
     return {
       buffer: new formatInfo.arrayBufferCtor(dataLength),
-      format: formatInfo.format,
+      format: formatInfo.readFormat,
       type: formatInfo.type,
-      valuesPerPixel: formatInfo.valuesPerPixel,
+      valuesPerPixel: formatInfo.readValuesPerPixel,
+      dimensions: { width, height },
     };
   }
 }
@@ -242,6 +299,7 @@ export type TextureReadBufferInfo = {
   format: number;
   type: number;
   valuesPerPixel: number;
+  dimensions: RenderDimensions;
 };
 
 export type TextureRenderProperties = {
@@ -250,4 +308,6 @@ export type TextureRenderProperties = {
   format: number;
   type: number;
   valuesPerPixel: number;
+  readFormat: number;
+  readValuesPerPixel: number;
 };

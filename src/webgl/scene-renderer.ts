@@ -1,8 +1,15 @@
 import type { ScreenRect } from "./dimension-types";
 import { DrawOptions } from "./draw-options";
-import type { AttribValues, DrawMode, ProgramInfo, UniformValues, VertexAttribsInfo } from "./program-types";
+import type {
+  AttribValues,
+  DrawMode,
+  ProgramInfo,
+  UniformName,
+  UniformValues,
+  VertexAttribsInfo,
+} from "./program-types";
 import { RenderTarget } from "./render-target";
-import { setUniforms, UniformCollector } from "./uniforms";
+import { CompleteUniformCollector, setUniforms, UniformCollector } from "./uniforms";
 
 export class SceneRenderer {
   private readonly sceneObjectGroups: SceneObjectGroup[] = [];
@@ -40,34 +47,68 @@ export class SceneRenderer {
       this.gl.scissor(drawingRect.xOffset, drawingRect.yOffset, drawingRect.width, drawingRect.height);
 
       group.drawOptions.setOptions(this.gl);
-      group.sceneObjects.forEach((obj) => {
-        obj.setObjectUniforms();
-        obj.setVao();
-        obj.drawVertices();
-      });
+      group.sceneObjects
+        .filter((obj) => obj.showObject())
+        .forEach((obj) => {
+          obj.setObjectUniforms();
+          obj.setVao();
+          obj.drawVertices();
+        });
 
       this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
     });
   }
 
-  public addSceneObjects<
-    TObj,
-    TContext extends object,
-    TAttribValues extends AttribValues,
-    TUniformValues extends UniformValues
-  >(
-    objects: TObj[],
-    uniformCollector: UniformCollector<TUniformValues, Extract<keyof TUniformValues, string>, TContext, TObj>,
+  public addSceneObject<TAttribValues extends AttribValues, TUniformValues extends UniformValues>(
+    uniformValues: TUniformValues,
     programInfo: ProgramInfo<TAttribValues, TUniformValues>,
     vaoInfo: VertexAttribsInfo<TAttribValues>,
     renderTarget: RenderTarget,
     drawOptions: DrawOptions
   ) {
     const renderer = this;
+    const sceneObject = {
+      setVao: () => renderer.setVao(vaoInfo),
+      setObjectUniforms: () => {},
+      drawVertices: () => drawVertices(renderer.gl, vaoInfo),
+      showObject: () => true,
+    };
+
+    this.sceneObjectGroups.push({
+      sceneObjects: [sceneObject],
+      renderTarget,
+      drawOptions,
+      setProgram: () => renderer.setProgramInfo(programInfo),
+      setSceneContext: () => ({}),
+      setSceneUniforms: () => setUniforms(programInfo.uniformSetters, uniformValues),
+    });
+  }
+
+  public addSceneObjects<
+    TUniformObj,
+    TObj extends TUniformObj,
+    TContext extends object,
+    TAttribValues extends AttribValues,
+    TUniformValues extends UniformValues
+  >(
+    objects: TObj[],
+    uniformCollector: CompleteUniformCollector<TUniformValues, TContext, TUniformObj>,
+    programInfo: ProgramInfo<TAttribValues, TUniformValues>,
+    vaoInfo: VertexAttribsInfo<TAttribValues>,
+    renderTarget: RenderTarget,
+    drawOptions: DrawOptions,
+    showObject: (obj: TObj) => boolean = () => true
+  ) {
+    if (objects.length === 0) {
+      return;
+    }
+
+    const renderer = this;
     const sceneObjects = objects.map<ObjectRenderInfo>((obj) => ({
       setVao: () => renderer.setVao(vaoInfo),
       setObjectUniforms: () => renderer.setObjectUniforms(programInfo, uniformCollector, obj),
       drawVertices: () => drawVertices(renderer.gl, vaoInfo),
+      showObject: () => showObject(obj),
     }));
 
     this.sceneObjectGroups.push({
@@ -117,7 +158,7 @@ export class SceneRenderer {
     TUniformValues extends UniformValues
   >(
     programInfo: ProgramInfo<TAttribValues, TUniformValues>,
-    uniformCollector: UniformCollector<TUniformValues, Extract<keyof TUniformValues, string>, TContext, TObj>
+    uniformCollector: CompleteUniformCollector<TUniformValues, TContext, TObj>
   ) {
     const context = this.lastSceneContext as TContext;
     if (context === null) {
@@ -138,7 +179,7 @@ export class SceneRenderer {
     TUniformValues extends UniformValues
   >(
     programInfo: ProgramInfo<TAttribValues, TUniformValues>,
-    uniformCollector: UniformCollector<TUniformValues, Extract<keyof TUniformValues, string>, TContext, TObj>,
+    uniformCollector: CompleteUniformCollector<TUniformValues, TContext, TObj>,
     obj: TObj
   ) {
     const context = this.lastSceneContext as TContext;
@@ -171,6 +212,7 @@ type ObjectRenderInfo = {
   setVao: () => void;
   setObjectUniforms: () => void;
   drawVertices: () => void;
+  showObject: () => boolean;
 };
 
 const drawModeLookup: { [mode in DrawMode]: (gl: WebGL2RenderingContext) => GLenum } = {

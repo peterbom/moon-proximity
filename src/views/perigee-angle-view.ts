@@ -110,7 +110,7 @@ export async function run(container: HTMLElement, state: State) {
   svg.append("g").attr("transform", `translate(${marginLeft},0)`).call(axisLeft(yScale));
 
   // Initial zoom.
-  svg.call(zoomBehavior).call(zoomBehavior.scaleTo, 1, [0, 0]);
+  svg.call(zoomBehavior).call(zoomBehavior.scaleTo, 8, [0, 0]);
 
   // Append the SVG element.
   container.append(svg.node()!);

@@ -67,6 +67,7 @@ const state: State = {
   perigees: new DelayedProperty<Perigee[]>(),
   selectedPerigee: new NotifiableProperty(null),
   proximityShapeData: new NotifiableProperty(null),
+  terrainLocationData: new NotifiableProperty(null),
 };
 
 type ElementFunctionLookup = {
