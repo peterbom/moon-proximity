@@ -123,14 +123,15 @@ function getTerrainOverlayElems(parent: Element): TerrainOverlayElems {
 
 const pinDisplayHtml = `
 <div>rank: <span data-var="rank"></span></div>
-`;
+${terrainDisplayHtml}`;
 
-type PinOverlayElems = {
+type PinOverlayElems = TerrainOverlayElems & {
   rank: Element;
 };
 
 function getPinOverlayElems(parent: Element): PinOverlayElems {
   return {
+    ...getTerrainOverlayElems(parent),
     rank: parent.querySelector("span[data-var='rank']")!,
   };
 }
@@ -374,19 +375,24 @@ function runWithReadyResources(context: MultiViewContext, state: State, resource
       const tilePos = resources.terrainData.getTilePositionFromMap([x, y]);
 
       const data = getTerrainLocationData(resources, tilePos);
-      resources.overlays.terrain.content.lat.textContent = data.latitudeDegrees.toFixed(2);
-      resources.overlays.terrain.content.lon.textContent = data.longitudeDegrees.toFixed(2);
-      resources.overlays.terrain.content.elev.textContent = data.altitudeInM.toFixed();
-      resources.overlays.terrain.content.dist.textContent = Math.round(data.distanceToMoonInKm).toLocaleString();
+      populateTerrainElems(resources.overlays.terrain.content, data);
+    } else if (pinObject !== undefined) {
+      const data = getTerrainLocationData(resources, pinObject.positionOnTile);
+      populateTerrainElems(resources.overlays.pin.content, data);
+
+      resources.overlays.pin.content.rank.textContent = pinObject.rank.toFixed();
+    }
+
+    function populateTerrainElems(elems: TerrainOverlayElems, data: TerrainLocationData) {
+      elems.lat.textContent = data.latitudeDegrees.toFixed(3);
+      elems.lon.textContent = data.longitudeDegrees.toFixed(3);
+      elems.elev.textContent = data.altitudeInM.toFixed();
+      elems.dist.textContent = Math.round(data.distanceToMoonInKm).toLocaleString();
 
       const deltaSign = Math.sign(data.relativeProximityInKm) >= 0 ? "+" : "-";
-      resources.overlays.terrain.content.deltaDist.textContent = `${deltaSign}${Math.abs(
-        data.relativeProximityInKm
-      ).toFixed(2)}`;
+      elems.deltaDist.textContent = `${deltaSign}${Math.abs(data.relativeProximityInKm).toFixed(3)}`;
 
-      resources.overlays.terrain.content.time.textContent = data.optimalDate.toISOString();
-    } else if (pinObject !== undefined) {
-      resources.overlays.pin.content.rank.textContent = pinObject.rank.toFixed();
+      elems.time.textContent = data.optimalDate.toISOString();
     }
   }
 
@@ -407,7 +413,7 @@ function runWithReadyResources(context: MultiViewContext, state: State, resource
   cleanup.add(terrainVao);
   cleanup.add(terrainCoordPickingVao);
 
-  const uniformContext = UniformContext.create((rect) => getSceneContext(resources, rect));
+  const uniformContext = UniformContext.create(getSceneContext);
 
   const uniformColorSimpleObjectUniformCollector = uniformContext
     .createCollector<UniformColorSimpleObjectUniformValues, UniformColorSceneObject>()
@@ -564,7 +570,7 @@ function runWithReadyResources(context: MultiViewContext, state: State, resource
   }
 }
 
-function getSceneContext(resources: ReadyResources, pixelRect: ScreenRect): SceneContext {
+function getSceneContext(pixelRect: ScreenRect): SceneContext {
   // Calculate the radius of the camera position on the X-Y plane relative to the camera target.
   const cameraPosRadius = viewInfo.cameraDistance * Math.sin(viewInfo.tiltAngle);
   const cameraZ = viewInfo.cameraDistance * Math.cos(viewInfo.tiltAngle);

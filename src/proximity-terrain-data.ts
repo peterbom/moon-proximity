@@ -192,7 +192,7 @@ export class ProximityTerrainData {
   public getLatLong(position: PositionOnTile): { long: number; lat: number } {
     const [tileX, tileY] = position.position;
     const long = position.tile.startLon + (tileX / elevationTileDimensions.width) * longitudeRadiansPerTile;
-    const lat = position.tile.startLat + (tileY / elevationTileDimensions.height) * latitudeRadiansPerTile;
+    const lat = position.tile.startLat - (tileY / elevationTileDimensions.height) * latitudeRadiansPerTile;
     return { long, lat };
   }
 
