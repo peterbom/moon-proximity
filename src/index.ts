@@ -1,4 +1,9 @@
-import { createCombinedCanvas, createDivInRelativeContainer, getScrollYLimit } from "./common/html-utils";
+import {
+  createCombinedCanvas,
+  createDivInRelativeContainer,
+  getElementByIdOrError,
+  getScrollYLimit,
+} from "./common/html-utils";
 import { Ephemeris } from "./ephemeris";
 import type { DateDistance, DatePosition, Perigee, State } from "./state-types";
 import { getWebGLContext, MultiViewContext } from "./webgl/context";
@@ -8,6 +13,7 @@ import { run as runPerigeeTimeView } from "./views/perigee-time-view";
 import { run as runPerigeeAngleView } from "./views/perigee-angle-view";
 import { run as runEarthView } from "./views/earth-view";
 import { run as runProximityMapView } from "./views/proximity-map-view";
+import { run as runSummaryView } from "./views/summary-view";
 import { DelayedProperty, NotifiableProperty } from "./common/state-properties";
 import { graphicRect, graphicSquare } from "./styles/graphics.module.css";
 
@@ -26,7 +32,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const gl = getWebGLContext(combinedCanvas);
   const multiSceneDrawer = new MultiSceneDrawer(gl);
 
-  const elemViewLookup: ElementFunctionLookup = {
+  const newElemViewLookup: ElementFunctionLookup = {
     "distance-time-view": { run: runDistanceTimeView, classList: [graphicRect] },
     "perigee-time-view": { run: runPerigeeTimeView, classList: [graphicRect] },
     "perigee-angle-view": { run: runPerigeeAngleView, classList: [graphicRect] },
@@ -37,8 +43,12 @@ document.addEventListener("DOMContentLoaded", function () {
     "proximity-map-view": { run: runProximityMapView, classList: [graphicRect] },
   };
 
-  Object.keys(elemViewLookup).forEach((containerId) => {
-    const { run, classList } = elemViewLookup[containerId];
+  const existingElemViewLookup: ElementFunctionLookup = {
+    "summary-view": { run: runSummaryView, classList: [] },
+  };
+
+  Object.keys(newElemViewLookup).forEach((containerId) => {
+    const { run, classList } = newElemViewLookup[containerId];
     const elem = createDivInRelativeContainer(containerId, ...classList);
     run(elem, state);
   });
@@ -47,6 +57,13 @@ document.addEventListener("DOMContentLoaded", function () {
     const { run, classList } = virtualCanvasViewLookup[containerId];
     const virtualCanvas = createDivInRelativeContainer(containerId, ...classList);
     run({ combinedCanvas, virtualCanvas, gl, multiSceneDrawer }, state);
+  });
+
+  Object.keys(existingElemViewLookup).forEach((elemId) => {
+    const { run, classList } = existingElemViewLookup[elemId];
+    const elem = getElementByIdOrError(elemId);
+    classList.forEach((c) => elem.classList.add(c));
+    run(elem, state);
   });
 });
 

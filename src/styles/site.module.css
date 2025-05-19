@@ -10,6 +10,24 @@
   margin: auto;
 }
 
+:global(dl.inline-term dt:before) {
+  content: "";
+  display: block;
+}
+
+:global(dl.inline-term dt) {
+  min-width: 16rem; /* TODO: has no effect because of inline display */
+}
+
+:global(dl.inline-term dt),
+:global(dl.inline-term dd) {
+  display: inline;
+}
+
 .overlay {
   background-color: black;
+}
+
+.hidden {
+  display: none;
 }
