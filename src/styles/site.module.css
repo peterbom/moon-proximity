@@ -1,27 +1,72 @@
 :global(body) {
   background-color: black;
   color: #ccc;
-  font: 1em sans-serif;
+  font-family: Tahoma, Verdana, sans-serif;
+  font: 1em;
 }
 
 :global(.content) {
   max-width: 50rem;
   padding: 0 3em 0 3em;
   margin: auto;
+  line-height: 1.5;
 }
 
-:global(dl.inline-term dt:before) {
-  content: "";
-  display: block;
+:global(dl.inline-term) {
+  display: flex;
+  flex-flow: row wrap;
 }
 
 :global(dl.inline-term dt) {
-  min-width: 16rem; /* TODO: has no effect because of inline display */
+  flex-basis: 20%;
+  flex-shrink: 0;
+  padding-right: 1rem;
+  padding-bottom: 0.6rem;
+  font-weight: bold;
 }
 
-:global(dl.inline-term dt),
 :global(dl.inline-term dd) {
-  display: inline;
+  flex-basis: 70%;
+  flex-grow: 1;
+  margin: 0;
+  padding-bottom: 0.6rem;
+}
+
+/* https://mdigi.tools/color-shades/#9d00ff */
+:global(a) {
+  text-decoration: underline;
+  color: #fff;
+}
+
+:global(a:link) {
+  color: #fff;
+}
+
+:global(a:visited) {
+  color: #fff;
+}
+
+:global(a:focus) {
+  color: #e2b3ff;
+}
+
+:global(a:hover) {
+  transition: 0.4s;
+  color: #e2b3ff;
+}
+
+:global(a:active) {
+  color: #e2b3ff;
+}
+
+:global(footer) {
+  border-top: 1px solid #fff;
+  margin-top: 4rem;
+  margin-left: auto;
+  margin-right: auto;
+  width: 100%;
+  max-width: 80rem;
+  font-size: small;
 }
 
 .overlay {

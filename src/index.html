@@ -10,8 +10,8 @@
     <h1>When and where on Earth am I closest to the Moon?</h1>
     <p>It sounds like a straightforward question, but happens to be deceptively complicated to answer. Why?</p>
     <ul>
-      <li>The distance of the Moon at its perigee (the cloest point in its orbit) varies over time.</li>
-      <li>The Earth spins, so you need to work out which <i>part</i> of the Earth is closest to the Moon.</li>
+      <li>The distance of the Moon at its perigee (the closest point to Earth in its orbit) varies over time.</li>
+      <li>The Earth spins, so you need to work out which <em>part</em> of the Earth is closest to the Moon.</li>
       <li>
         The Earth is not perfectly spherical; it's an ellipsoid whose radius is greater at the equator than the poles.
       </li>
@@ -20,13 +20,15 @@
     <p>
       For any given place on Earth, you can use the excellent
       <a href="https://ssd.jpl.nasa.gov/horizons/app.html">Horizons</a>
-      tool from Nasa's Jet Propulsion Laboratory to find the exact distance of the Moon at any time, latitude, longitude
-      and altitude.
+      tool from NASA's Jet Propulsion Laboratory to find the exact distance of the Moon at any time, latitude, longitude
+      and altitude. But how do you know what time and position to search for?
     </p>
     <p>
-      But to answer our question here, we need to go the other way. Assuming we can predict roughly when the Moon will
-      be closest to the Earth, what position do we need to be at? And at exactly what time?
+      To answer our question here, we need to go the other way. Assuming we can predict roughly when the Moon will be
+      closest to the Earth, what position do we need to be at? And at exactly what time?
     </p>
+
+    <h2>The Lunar Cycle</h2>
     <p>
       To get started, we need to know the times when the Moon is closest to the Earth. We'll temporarily shelve any
       questions about where on the surface of the Earth we'll need to be. Here's a chart of the Moon's distance from
@@ -40,46 +42,137 @@
     </p>
     <p>
       For our purposes here, we care mainly about the troughs (upside-down peaks, not animal feeders). These represent
-      the points where the Moon is closest to the Earth (each 'perigee' of the lunar orbit). Let's ignore the rest of
-      the orbit and focus only on the perigees. Here they are:
+      the points where the Moon is closest to the Earth (i.e. each <em>perigee</em> of the lunar orbit). Let's ignore
+      the rest of the orbit and focus only on the perigees. Here they are:
     </p>
     <div id="perigee-time-view"></div>
-    <p>There are a few extra things shown here:</p>
+    <p>There are a few things to note here:</p>
     <ul>
       <li>Each circle shows the distance of the Moon at its perigee.</li>
       <li>The vertical white lines represent full moons.</li>
       <li>
-        The dashed line does <i>not</i> represent the distance of the Moon, but is instead a best-fit of its distance at
-        each perigee. Its purpose is to show the regular wave-like pattern of the perigees getting closer and further
-        away over time.
+        The dashed line does <em>not</em> represent the distance of the Moon, but is instead a best-fit of its distance
+        at each perigee. Its purpose is to show the regular wave-like pattern of the perigees advancing and receding
+        over time.
       </li>
       <li>Solid white circles show the perigees which are closest in time to Super Moons.</li>
       <li>Black circles with white outline show the perigees which are closest in time to Super New Moons.</li>
+      <li>You can click on any circle. This will allow us to examine it in more detail.</li>
     </ul>
     <p>
       There is a cycle which repeats a bit less than once per year, where the perigees get closest at alternating Super
       Moons and Super New Moons. These are the points where the Sun, Earth and Moon are all roughly aligned.
     </p>
     <p>
-      The reason it's not exactly once per year is 'apsidal precession', in which the orientation of the Moon's
+      The reason it's not <em>exactly</em> once per year is 'apsidal precession', in which the orientation of the Moon's
       eliptical orbit rotates once every 8.85 years. Because it's rotating in the same direction as the Moon rotates
-      around the Earth, it takes a little over a year for the line of apsides to get back to the same orientation
+      around the Earth, it takes a little over a year for the line of apsides to get back to its initial orientation
       relative to the Sun. This is all explained much better by Bartosz Ciechanowski's fantastic
       <a href="https://ciechanow.ski/moon/">guide to the Moon</a>.
     </p>
     <p>
       Now we know that the Moon is closest when it's aligned with the Earth and the Sun, we can re-order our chart of
-      perigees. This time, we can plot the
-      <i>angle</i> of the Moon relative to its full moon position, as observed from Earth. Full moons would be close to
-      0° and new moons would be around 180°. The curve here confirms the moon is consistently closest when the perigee
-      coincides with both full moons and new moons. Because the points are all clustered together in this view you'll
-      probably need to zoom in to distinguish them.
+      perigees. This time, we can plot the <em>angle</em> of the Moon relative to its full moon position, as observed
+      from Earth. Full moons would be close to 0° and new moons would be around 180°. The curve here is not perfect,
+      suggesting that there are other factors influencing the Moon's proximity at its perigee (you need to zoom out to
+      see the rough fit). Nevertheless, this is somewhat helpful for comparing times when the moon is at its closest.
     </p>
-    <p></p>
+    <p>Select any point (perigee) on this chart or the previous one to examine it further.</p>
     <div id="perigee-angle-view"></div>
+
+    <h2>Earth's Orientation to The Moon</h2>
+    <p>
+      Now we have a time when the Moon is relatively close to the Earth, we need to know <em>which part</em> of the
+      Earth it's closest to.
+    </p>
+    <p>
+      The Earth rotates around its axis faster than the Moon rotates around the Earth. So as the Moon reaches its
+      perigee, the part of the Earth closest to it will form a path East to West across the Earth's surface. We can show
+      this path as a highlighted area on a globe.
+    </p>
+    <p>
+      If the world were a perfectly smooth sphere, there would be exactly one point on the surface that will be closest
+      to the moon at the precise moment it reaches its perigee, and <em>that</em> would be our closest possible
+      location. But the world is bumpy, and hills make a difference. How far and wide do we need to search for hills?
+    </p>
+    <p>
+      One way to look at it is: for each perigee there will be one sea-level geographic location which is closest to the
+      Moon right at the instant of its perigee. I'll call this potential pinnacle of proximity the "<em
+        >base position</em
+      >", and its distance to the Moon (from sea level) at the instant of the perigee will be the "<em>base distance</em
+      >".
+    </p>
+    <p>
+      Every other geographic position on Earth is closest to the Moon at some instant in time around the perigee (in
+      general this won't be the same time as for the base position). At that instant, the location will be a certain
+      amount <em>further away</em> from the Moon than the base distance. I'll call that extra distance the
+      "<em>delta</em>" distance. In some cases, elevated terrain close to the base position will make the delta
+      negative. This will be good news for us—the more negative the better. There will be one point on Earth which has
+      the absolute lowest (most negative) delta. This will be the "<em>perfect position</em>" and our mission here is to
+      find it.
+    </p>
+    <p>
+      As you move North or South from the base position, the curvature of the Earth's surface means you get further away
+      from the Moon. Four degrees latitude in either direction raises our sea-level deltas over 15km. By that stage no
+      mountain is big enough to make up for that loss.
+    </p>
+    <p>
+      How far to search East and West is a bit more complicated. Since the Earth is spinning, an elongated strip of its
+      surface presents itself to the Moon, with different parts closest at different times. In other words the delta
+      increases more gradually in the longitudinal directions, depending on how fast the Moon approaches its perigee and
+      recedes, as well as the speed the Earth is spinning relative to the Moon. But we can still work out a limit of the
+      area we need to consider by restricting it to points where the delta is less than, say, 10km (again, because no
+      land feature protrudes more than 10km above sea level).
+    </p>
+    <p>
+      Based on those calculations, the area we need to search is highlighted below. The deepest highlight colors
+      represent areas where the delta is lowest, and fading out completely in areas where the delta is more than 10km.
+    </p>
     <div id="earth-view"></div>
+    <p>
+      Also shown here are a couple of lines indicating the direction of the Moon and Sun. You can adjust the time (which
+      is initially set to the perigee—when the base position is closest to the Moon). This gives an idea of how the
+      closest point changes over time. The translucent flat surface is the ecliptic plane (the flat surface on which the
+      Earth rotates around the Sun) and is shown to give a sense of orientation because I've anchored the "up/down"
+      directions to align with the Earth's poles.
+    </p>
+
+    <h2>Terrain</h2>
+    <p>
+      This is all well and good, but rather than defacing Mother Earth with a giant highlighter, it would be nice to
+      visualize the terrain of this area. We want to see <em>which</em> land features bring you closest to the Moon if
+      you're there at just the right time. The next view helps with that.
+    </p>
+    <p>
+      Here we bring in actual elevation data for topography, but it's really showing the <em>delta</em> distances to the
+      Moon, so heights are intentionally warped and inaccurate. Since it's a large area and the height differences are
+      relatively small, we'll need to exaggerate the heights so that areas closest to the moon are more prominent. Areas
+      of the Earth not directly 'under' the Moon's path have a larger delta distance, which means they appear to droop
+      downwards alarmingly. I'm not a map expert, but I think this view is what's known in cartographic circles as a
+      "Dalí Equirectangular Projection":
+    </p>
     <div id="proximity-map-view"></div>
+    <p>
+      The red circle is a pin indicating the best guess for the perfect position. It's unfortunately limited by the
+      resolution of the height map data: one single elevation data point covers around 3.5km&sup2;. This means we don't
+      have sufficient information to get a <em>definitive</em> answer to our question.
+    </p>
+    <p>
+      However, this view at least allows us to narrow things down to certain areas. We can also use the "pins" slider to
+      add the 2<sup>nd</sup>, 3<sup>rd</sup> (and so on) best guesses for the perfect point.
+    </p>
+    <p>
+      You can click on any of the pins. This will present a summary of the information for that location, as well as a
+      link to open the area in Google Earth for much more detailed viewing of the terrain.
+    </p>
+    <p>
+      To aid the visual sense of relative prominence to the land features here, there's a horizontal plane which you can
+      raise or lower, to see which parts of the land protrude more than others (like a sea level rise flood simulation).
+      This can be useful in conjunction with the sliders for rotating and tilting the view, as well as panning and
+      scrolling to zoom in on promising terrain features.
+    </p>
     <div id="summary-view">
+      <h3>Summary</h3>
       <dl class="inline-term">
         <dt>Distance</dt>
         <dd data-var="dist"></dd>
@@ -87,11 +180,42 @@
         <dd data-var="elev"></dd>
         <dt>Date</dt>
         <dd data-var="date"></dd>
-        <dt>Open in Google Earth</dt>
-        <dd data-var="earth"><a href="#" target="_blank" rel="noopener noreferrer">Link</a></dd>
+        <dt>Google Earth</dt>
+        <dd data-var="earth"><a href="#" target="_blank" rel="noopener noreferrer">Open</a></dd>
       </dl>
     </div>
+
+    <h2>Next Steps</h2>
+    <p>
+      I think we're a little closer to answering the question we set out with, but we haven't <em>quite</em> got a
+      definite answer. There's still some exploring to do, online or in real life.
+    </p>
+    <p>
+      After finding a promising candidate perfect position and time, we can punch it into the
+      <a href="https://ssd.jpl.nasa.gov/horizons/app.html">Horizons</a> app to check the distance to the Moon for real.
+      (TODO: We should be able to call the API from here...)
+    </p>
   </div>
+
+  <footer>
+    <h4>Acknowledgements</h4>
+    <dl class="inline-term">
+      <dt><a href="https://ciechanow.ski/">Bartosz Ciechanowski</a>'s website</dt>
+      <dd>
+        For the inspiration, as well as the raw ephemeris data and the code for reading it (which I shamelessly took
+        straight from the website because I have no idea how to generate it myself).
+      </dd>
+      <dt>
+        Gregg Tavares' <a href="https://webgl2fundamentals.org/">WebGL2 Fundamentals</a> course and
+        <a href="https://github.com/greggman/twgl.js">TWGL</a> library
+      </dt>
+      <dd>Much of the code for the visualizations was adapted from these sources.</dd>
+      <dt>NASA's <a href="https://visibleearth.nasa.gov/collection/1484/blue-marble">Blue Marble Collection</a></dt>
+      <dd>For the visual imagery and topography data.</dd>
+      <dt><a href="https://d3js.org/">D3.js</a></dt>
+      <dd>For the charts.</dd>
+    </dl>
+  </footer>
 
   <script type="module" src="index.js"></script>
 </body>
