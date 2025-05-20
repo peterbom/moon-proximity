@@ -1,20 +1,29 @@
 .graphicRect {
-  display: inline-block;
+  display: block;
   width: 100%;
   height: unset;
   aspect-ratio: 4/3;
 }
 
 .graphicSquare {
-  display: inline-block;
+  display: block;
   width: 100%;
   height: unset;
   aspect-ratio: 1/1;
 }
 
-@media (max-width: 800px) and (orientation: portrait) {
+@media (max-width: 800px) {
   .graphicRect {
+    width: unset;
+    margin-left: 2rem;
+    margin-right: 2rem;
     aspect-ratio: 1/1;
+  }
+
+  .graphicSquare {
+    width: unset;
+    margin-left: 2rem;
+    margin-right: 2rem;
   }
 }
 

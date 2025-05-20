@@ -54,8 +54,8 @@ export async function run(container: HTMLElement, state: State) {
   const zoomBehavior = zoom<SVGSVGElement, undefined>()
     .scaleExtent([1, 32])
     .extent([
-      [marginLeft, 0],
-      [width - marginRight, height],
+      [marginLeft, marginTop],
+      [width - marginRight, height - marginBottom],
     ])
     .translateExtent([
       [marginLeft, -Infinity],

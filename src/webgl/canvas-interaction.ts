@@ -35,8 +35,8 @@ export function addMouseListeners(
 
   if (clickHandler) {
     const listener = (e: MouseEvent) => handleMouseClick(e, combinedCanvas, virtualCanvas, clickHandler);
-    virtualCanvas.addEventListener("click", listener, false);
-    cleaners.push(() => virtualCanvas.removeEventListener("click", listener, false));
+    virtualCanvas.addEventListener("pointerdown", listener, false);
+    cleaners.push(() => virtualCanvas.removeEventListener("pointerdown", listener, false));
   }
 
   return {

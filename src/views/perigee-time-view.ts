@@ -68,8 +68,8 @@ export async function run(container: HTMLElement, state: State) {
   const zoomBehavior = zoom<SVGSVGElement, undefined>()
     .scaleExtent([1, 32])
     .extent([
-      [marginLeft, 0],
-      [width - marginRight, height],
+      [marginLeft, marginTop],
+      [width - marginRight, height - marginBottom],
     ])
     .translateExtent([
       [marginLeft, -Infinity],
@@ -121,7 +121,7 @@ export async function run(container: HTMLElement, state: State) {
     .style("cursor", "pointer")
     .on("mouseover", (_e, p) => handlePerigeeMouseover(tooltipOverlay, p, xZoomed(p.date), yScale(p.distance)))
     .on("mouseout", () => handlePerigeeMouseout(tooltipOverlay))
-    .on("click", (_e, p) => state.selectedPerigee.setValue(p));
+    .on("pointerdown", (_e, p) => state.selectedPerigee.setValue(p));
 
   const fullMoonLines = svg
     .append("g")
