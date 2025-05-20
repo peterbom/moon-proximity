@@ -24,6 +24,19 @@
   mix-blend-mode: difference; /* allow visibility on different background colors: https://stackoverflow.com/a/58460326 */
 }
 
+@media (max-width: 800px) {
+  .controlGroup {
+    display: inline-block;
+    position: relative;
+    top: unset;
+    right: unset;
+    opacity: 1;
+    width: 100%;
+    color: unset;
+    mix-blend-mode: unset;
+  }
+}
+
 .controlGroup > div {
   pointer-events: none;
 }

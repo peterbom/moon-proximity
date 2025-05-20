@@ -12,6 +12,12 @@
   aspect-ratio: 1/1;
 }
 
+@media (max-width: 800px) and (orientation: portrait) {
+  .graphicRect {
+    aspect-ratio: 1/1;
+  }
+}
+
 .canvasOverlay {
   background-color: black;
 }

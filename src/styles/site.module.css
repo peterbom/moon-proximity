@@ -2,7 +2,7 @@
   background-color: black;
   color: #ccc;
   font-family: Tahoma, Verdana, sans-serif;
-  font: 1em;
+  font-size: 1em;
 }
 
 :global(.content) {
@@ -10,6 +10,12 @@
   padding: 0 3em 0 3em;
   margin: auto;
   line-height: 1.5;
+}
+
+@media (max-width: 800px) {
+  :global(.content) {
+    padding: 0;
+  }
 }
 
 /* https://csstoggles.github.io/ */
