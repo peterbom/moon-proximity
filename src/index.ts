@@ -1,9 +1,4 @@
-import {
-  createCombinedCanvas,
-  createDivInRelativeContainer,
-  getElementByIdOrError,
-  getScrollYLimit,
-} from "./common/html-utils";
+import { createCombinedCanvas, createDivInRelativeContainer, getElementByIdOrError } from "./common/html-utils";
 import { Ephemeris } from "./ephemeris";
 import type { DateDistance, DatePosition, Perigee, State } from "./state-types";
 import { getWebGLContext, MultiViewContext } from "./webgl/context";
@@ -16,21 +11,22 @@ import { run as runProximityMapView } from "./views/proximity-map-view";
 import { run as runSummaryView } from "./views/summary-view";
 import { DelayedProperty, NotifiableProperty } from "./common/state-properties";
 import { graphicRect, graphicSquare } from "./styles/graphics.module.css";
-
-onbeforeunload = function (e) {
-  localStorage.setItem("mp-scrollpos", window.scrollY.toString());
-};
+import { hidden } from "./styles/site.module.css";
 
 document.addEventListener("DOMContentLoaded", function () {
-  const storedScrollpos = localStorage.getItem("mp-scrollpos");
-  if (storedScrollpos) {
-    const scrollPos = Math.min(parseInt(storedScrollpos), getScrollYLimit());
-    window.scrollTo(0, scrollPos);
-  }
+  const tldrCheckbox = getElementByIdOrError<HTMLInputElement>("tldr-checkbox");
+  tldrCheckbox.addEventListener("change", () => state.tldrView.setValue(tldrCheckbox.checked));
 
+  const elementsByView = getElementsByView();
   const combinedCanvas = createCombinedCanvas();
   const gl = getWebGLContext(combinedCanvas);
   const multiSceneDrawer = new MultiSceneDrawer(gl);
+
+  state.tldrView.subscribe(() => showHideElements(elementsByView));
+  state.selectedPerigee.subscribe(() => showHideElements(elementsByView));
+  state.proximityShapeData.subscribe(() => showHideElements(elementsByView));
+  state.terrainLocationData.subscribe(() => showHideElements(elementsByView));
+  showHideElements(elementsByView);
 
   const newElemViewLookup: ElementFunctionLookup = {
     "distance-time-view": { run: runDistanceTimeView, classList: [graphicRect] },
@@ -78,6 +74,7 @@ async function getEphemeris(): Promise<Ephemeris> {
 }
 
 const state: State = {
+  tldrView: new NotifiableProperty<boolean>(false),
   ephPromise: getEphemeris(),
   datePositions: new DelayedProperty<DatePosition[]>(),
   dateDistances: new DelayedProperty<DateDistance[]>(),
@@ -99,3 +96,46 @@ type VirtualCanvasFunctionLookup = {
     classList: string[];
   };
 };
+
+type ElementsByView = {
+  tldrElems: NodeListOf<HTMLElement>;
+  longElems: NodeListOf<HTMLElement>;
+  perigeeDependentElems: NodeListOf<HTMLElement>;
+  locationDependentElems: NodeListOf<HTMLElement>;
+};
+
+function getElementsByView(): ElementsByView {
+  const contentElem = document.querySelector(".content");
+  if (!contentElem) {
+    throw new Error("Content element not found.");
+  }
+
+  return {
+    tldrElems: contentElem.querySelectorAll("[data-mode='tldr']"),
+    longElems: contentElem.querySelectorAll("[data-mode='long']"),
+    perigeeDependentElems: contentElem.querySelectorAll("[data-selection='perigee']"),
+    locationDependentElems: contentElem.querySelectorAll("[data-selection='location']"),
+  };
+}
+
+function showHideElements(elementsByView: ElementsByView) {
+  const hiddenElems = new Set<HTMLElement>();
+
+  const isTldrView = state.tldrView.getValue();
+  const isPerigeeSelected = state.selectedPerigee.getValue() !== null;
+  const isLocationSelected = isPerigeeSelected && state.terrainLocationData.getValue() !== null;
+
+  elementsByView.tldrElems.forEach((elem) => !isTldrView && hiddenElems.add(elem));
+  elementsByView.longElems.forEach((elem) => isTldrView && hiddenElems.add(elem));
+  elementsByView.perigeeDependentElems.forEach((elem) => !isPerigeeSelected && hiddenElems.add(elem));
+  elementsByView.locationDependentElems.forEach((elem) => !isLocationSelected && hiddenElems.add(elem));
+
+  const allElems = [
+    ...elementsByView.tldrElems,
+    ...elementsByView.longElems,
+    ...elementsByView.perigeeDependentElems,
+    ...elementsByView.locationDependentElems,
+  ];
+
+  allElems.forEach((elem) => (hiddenElems.has(elem) ? elem.classList.add(hidden) : elem.classList.remove(hidden)));
+}

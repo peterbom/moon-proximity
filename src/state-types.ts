@@ -3,6 +3,7 @@ import { EarthMoonPositions, Ephemeris } from "./ephemeris";
 import { ProximityShapeData } from "./geo-shape-data";
 
 export type State = {
+  tldrView: NotifiableProperty<boolean>;
   ephPromise: Promise<Ephemeris>;
   datePositions: DelayedProperty<DatePosition[]>;
   dateDistances: DelayedProperty<DateDistance[]>;
