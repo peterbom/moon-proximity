@@ -108,7 +108,7 @@ const viewInfo = {
   farLimit: 1e8,
 };
 
-const earthTexturePath = "/resources/2k_earth_daymap.jpg";
+const earthTexturePath = "./resources/2k_earth_daymap.jpg";
 const earthTextureDefinition = new TextureDefinition("RGB8").withMipmap(true);
 
 const earthShapeData = createEllipsoidShapeData(earthEquatorialRadius, earthPolarRadius);
