@@ -162,14 +162,14 @@
       circles as a "Dalí Equirectangular Projection":
     </p>
     <div id="proximity-map-view" data-selection="perigee"></div>
-    <p data-mode="tldr" data-selection="perigee">
-      The red circle is a pin indicating the best guess for the point on the Earth's surface which is closest to the
-      Moon. More pins can be added using the "pins" slider. Select one to view a summary and Google Earth link.
+    <p data-selection="perigee">
+      The red pin indicates the best guess for the perfect position. More pins can be added using the "pins" slider. As
+      you pan around or select pins, the selected position (indicated by the vertical line pointing to the Moon) will
+      change, updating the summary data and Google Earth link below.
     </p>
     <p data-mode="long" data-selection="perigee">
-      The red circle is a pin indicating the best guess for the perfect position. You can select it to view a summary
-      and Google Earth link. Its location is unfortunately limited by the resolution of the height map data: one single
-      elevation data point covers around 3.5km&sup2;. This means we don't have sufficient information to get a
+      The pin location and height accuracy are unfortunately limited by the resolution of the height map data: one
+      single elevation data point covers around 3.5km&sup2;. This means we don't have sufficient information to get a
       <em>definitive</em> answer to our question.
     </p>
     <p data-mode="long" data-selection="perigee">
@@ -187,6 +187,10 @@
       <dl class="inline-term">
         <dt>Distance</dt>
         <dd data-var="dist"></dd>
+        <dt>Latitude</dt>
+        <dd data-var="lat"></dd>
+        <dt>Longitude</dt>
+        <dd data-var="lon"></dd>
         <dt>Elevation</dt>
         <dd data-var="elev"></dd>
         <dt>Date</dt>

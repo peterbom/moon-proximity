@@ -4,6 +4,7 @@ import {
   getOrCreateAbsolutePositionCanvas,
   OverlayElement,
   setAbsoluteStyleRect,
+  setupCheckbox,
   setupSlider,
   StyleRect,
 } from "../common/html-utils";
@@ -22,13 +23,13 @@ import {
   getTransformSeriesMatrix,
   TransformSeries,
 } from "../common/xform";
-import { earthEquatorialRadius, highlightClosestKmCount } from "../constants";
+import { earthEquatorialRadius, highlightClosestKmCount, moonlightColor } from "../constants";
 import { createPinShapeData, ProximityShapeData } from "../geo-shape-data";
 import { ProximityTileCollection } from "../map-tiling/proximity-tile-collection";
 import type { PositionOnTile } from "../map-tiling/tile-types";
 import { ProximityTerrainData, TerrainLocation } from "../proximity-terrain-data";
 import type { State, TerrainLocationData } from "../state-types";
-import { overlay } from "../styles/site.module.css";
+import { hidden, overlay } from "../styles/site.module.css";
 import { addZoomHandler } from "../webgl/canvas-interaction";
 import type { MultiViewContext } from "../webgl/context";
 import type { CanvasCoordinates, ScreenRect } from "../webgl/dimension-types";
@@ -71,8 +72,8 @@ const debugDataTexturesIndex = -1;
 const idGenerator = new IdGenerator(1);
 const cleanup = new Cleanup();
 
-const initialCameraDistance = 500 / earthEquatorialRadius; // radians, 1 ~= 6378km
-const initialTiltAngle = degToRad(0); // from vertical
+const initialCameraDistance = 1000 / earthEquatorialRadius; // radians, 1 ~= 6378km
+const initialTiltAngle = degToRad(40); // from vertical
 const mPerRadian = earthEquatorialRadius * 1000;
 const trueHeightScaleFactor = 1 / mPerRadian;
 
@@ -86,6 +87,7 @@ const viewInfo = {
   nearLimit: 0.001,
   farLimit: 10,
   pinCount: 1,
+  showPlane: false,
   planeProximity: -100,
 };
 
@@ -194,6 +196,10 @@ async function runWithNewSelection(context: MultiViewContext, state: State, reso
   // Every time new data is selected, clean up previous resources.
   cleanup.clean();
 
+  viewInfo.cameraDistance = initialCameraDistance;
+  viewInfo.tiltAngle = initialTiltAngle;
+  viewInfo.rotation = 0;
+
   if (resources.proximityShapeData === null) {
     return;
   }
@@ -204,17 +210,14 @@ async function runWithNewSelection(context: MultiViewContext, state: State, reso
 
   const closestPoint = terrainData.getTopClosestPoints(1)[0];
 
-  viewInfo.cameraDistance = initialCameraDistance;
-  viewInfo.tiltAngle = initialTiltAngle;
-  viewInfo.rotation = 0;
-  viewInfo.panPosition = terrainData.getTargetPosition(closestPoint.positionOnTile);
-
   const readyResources: ReadyResources = {
     ...resources,
     proximityShapeData,
     terrainData,
     closestPoint,
   };
+
+  setPosition(readyResources, state, terrainData.getTargetPosition(closestPoint.positionOnTile));
 
   runWithReadyResources(context, state, readyResources);
 }
@@ -241,13 +244,20 @@ function runWithReadyResources(context: MultiViewContext, state: State, resource
     max: 10,
   });
 
-  setupSlider(context.virtualCanvas, "plane height (m)", {
+  setupCheckbox(context.virtualCanvas, "show plane", {
+    checked: viewInfo.showPlane,
+    changed: updateShowPlane,
+  });
+
+  const planeHeightSlider = setupSlider(context.virtualCanvas, "plane height (m)", {
     value: viewInfo.planeProximity,
     updated: updatePlaneHeight,
     min: -highlightClosestKmCount * 1000,
     max: resources.closestPoint.proximity,
     step: 10,
   });
+
+  updateShowPlane(viewInfo.showPlane); // Updates visibility
 
   const closestPoints = resources.terrainData.getTopClosestPoints(10);
   const terrainShapeData = resources.terrainData.createShapeData();
@@ -267,23 +277,37 @@ function runWithReadyResources(context: MultiViewContext, state: State, resource
       asScaleTransform([terrainWidth, terrainHeight, 1]),
       asTranslation([terrainExtent.minX, terrainExtent.minY, viewInfo.planeProximity * viewInfo.heightScaleFactor]),
     ],
+    show: true,
   };
 
   const lineObjects: UniformColorSceneObject[] = [
     {
       id: idGenerator.getNextId(),
+      getTransforms: () => [
+        asScaleTransform(earthEquatorialRadius * 2),
+        asYRotation(-Math.PI / 2),
+        asTranslation([...viewInfo.panPosition, -highlightClosestKmCount * 1000 * viewInfo.heightScaleFactor]),
+      ],
+      color: [...moonlightColor, 1],
+      show: true,
+    },
+    {
+      id: idGenerator.getNextId(),
       getTransforms: () => [asScaleTransform(earthEquatorialRadius * 2)],
       color: [1, 0, 0, 1],
+      show: false,
     },
     {
       id: idGenerator.getNextId(),
       getTransforms: () => [asScaleTransform(earthEquatorialRadius * 2), asZRotation(Math.PI / 2)],
       color: [0, 1, 0, 1],
+      show: false,
     },
     {
       id: idGenerator.getNextId(),
       getTransforms: () => [asScaleTransform(earthEquatorialRadius * 2), asYRotation(-Math.PI / 2)],
       color: [0, 0, 1, 1],
+      show: false,
     },
   ];
 
@@ -315,6 +339,17 @@ function runWithReadyResources(context: MultiViewContext, state: State, resource
     context.multiSceneDrawer.requestRedraw(context.virtualCanvas);
   }
 
+  function updateShowPlane(show: boolean) {
+    viewInfo.showPlane = show;
+    if (show) {
+      planeHeightSlider.classList.remove(hidden);
+    } else {
+      planeHeightSlider.classList.add(hidden);
+    }
+
+    context.multiSceneDrawer.requestRedraw(context.virtualCanvas);
+  }
+
   function updatePlaneHeight(proximity: number) {
     viewInfo.planeProximity = proximity;
     context.multiSceneDrawer.requestRedraw(context.virtualCanvas);
@@ -329,7 +364,8 @@ function runWithReadyResources(context: MultiViewContext, state: State, resource
     const delta: Vector3 = [-deltaX * visibleDistancePerClipUnit, -deltaY * visibleDistancePerClipUnit, 0];
     const [[panX, panY]] = applyTransforms([asZRotation(viewInfo.rotation)], delta);
 
-    viewInfo.panPosition = addVectors(viewInfo.panPosition, [panX, panY]);
+    const panPosition = addVectors(viewInfo.panPosition, [panX, panY]);
+    setPosition(resources, state, panPosition);
 
     context.multiSceneDrawer.requestRedraw(context.virtualCanvas);
   }
@@ -347,10 +383,7 @@ function runWithReadyResources(context: MultiViewContext, state: State, resource
     }
 
     const pinPosition = resources.terrainData.getTargetPosition(pinObject.positionOnTile);
-    viewInfo.panPosition = pinPosition;
-
-    const data = getTerrainLocationData(resources, pinObject.positionOnTile);
-    state.terrainLocationData.setValue(data);
+    setPosition(resources, state, pinPosition);
 
     context.multiSceneDrawer.requestRedraw(context.virtualCanvas);
   }
@@ -466,7 +499,8 @@ function runWithReadyResources(context: MultiViewContext, state: State, resource
     resources.programs.uniformColorSimpleObjectProgramInfo,
     resources.vaos.horizontalPlane,
     screenRenderTarget,
-    DrawOptions.default().blend(true).depthMask(false).depthTest(true)
+    DrawOptions.default().blend(true).depthMask(false).depthTest(true),
+    (obj) => viewInfo.showPlane
   );
 
   sceneRenderer.addSceneObjects(
@@ -476,7 +510,7 @@ function runWithReadyResources(context: MultiViewContext, state: State, resource
     resources.vaos.straightLine,
     screenRenderTarget,
     DrawOptions.default(),
-    () => false
+    (obj) => obj.show
   );
 
   sceneRenderer.addSceneObjects(
@@ -632,6 +666,13 @@ function getTerrainLocationData(resources: ReadyResources, tilePos: PositionOnTi
   };
 }
 
+function setPosition(resources: ReadyResources, state: State, mapPosition: Vector2) {
+  const tilePosition = resources.terrainData.getTilePositionFromMap(mapPosition);
+  const data = getTerrainLocationData(resources, tilePosition);
+  state.terrainLocationData.setValue(data);
+  viewInfo.panPosition = mapPosition;
+}
+
 type NewSelectionResources = {
   overlays: Overlays;
   programs: Programs;
@@ -685,6 +726,7 @@ type CommonSceneObject = ObjectWithId & {
 
 type UniformColorSceneObject = CommonSceneObject & {
   color: Vector4;
+  show: boolean;
 };
 
 type PinObject = CommonSceneObject & {

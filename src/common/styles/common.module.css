@@ -76,6 +76,13 @@
   min-width: 120px;
 }
 
+.checkboxControl {
+  opacity: 0.5;
+  font-size: large;
+  margin-left: 0.3em;
+  margin-right: calc(120px + 3em);
+}
+
 .canvasOverlay {
   position: absolute;
   left: 0;

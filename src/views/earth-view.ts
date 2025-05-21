@@ -35,6 +35,7 @@ import {
   earthPolarRadius,
   highlightClosestKmCount,
   highlightColor,
+  moonlightColor,
   sunlightColor,
 } from "../constants";
 import { Ephemeris } from "../ephemeris";
@@ -278,7 +279,7 @@ function runWithDate(
         asScaleTransform(earthEquatorialRadius * 2),
         ...sceneInfo.earthLocalWorldTransforms.localToWorldTransforms,
       ],
-      color: [0.6, 0.6, 0.6, 1],
+      color: [...moonlightColor, 1],
       show: true,
     },
     {

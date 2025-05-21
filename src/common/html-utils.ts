@@ -2,6 +2,7 @@ import { Vector4 } from "./numeric-types";
 import {
   absolute,
   canvasOverlay,
+  checkboxControl,
   combinedCanvas,
   controlGroup,
   relativeContainer,
@@ -105,6 +106,37 @@ export function setAbsoluteStyleRect(elem: HTMLElement, visible: boolean, rect: 
   }
 }
 
+export type CheckedChangedHandler = (checked: boolean) => void;
+
+export type CheckboxOptions = {
+  checked: boolean;
+  changed: CheckedChangedHandler;
+};
+
+export function setupCheckbox(canvasPlacementElement: Element, label: string, options: CheckboxOptions): Element {
+  const relativeContainer = getRelativeContainerOrError(canvasPlacementElement);
+  const controlGroupElement = getOrCreateControlGroup(relativeContainer);
+  const singleControlElement = getOrCreateSingleControlElement(controlGroupElement, label);
+
+  singleControlElement.innerHTML = `
+    <div class="${singleControlLabel}">${label}</div>
+    <input class="${checkboxControl}" type="checkbox" />
+  `;
+
+  const checkboxElem = singleControlElement.querySelector(`.${checkboxControl}`) as HTMLInputElement;
+  checkboxElem.checked = options.checked;
+
+  function handleChange(event: Event) {
+    if (!(event.target instanceof HTMLInputElement)) {
+      return;
+    }
+    options.changed(event.target.checked);
+  }
+
+  checkboxElem.addEventListener("change", handleChange);
+  return singleControlElement;
+}
+
 export type SlideHandler = (value: number) => void;
 
 export type SliderOptions = {
@@ -129,7 +161,11 @@ const defaultSliderOptions: SliderOptions = {
   displayVal: (value, precision) => value.toFixed(precision),
 };
 
-export function setupSlider(canvasPlacementElement: Element, label: string, options: Partial<SliderOptions> = {}) {
+export function setupSlider(
+  canvasPlacementElement: Element,
+  label: string,
+  options: Partial<SliderOptions> = {}
+): Element {
   const { updated, precision, min, max, step, value, displayVal } = { ...defaultSliderOptions, ...options };
 
   const relativeContainer = getRelativeContainerOrError(canvasPlacementElement);
@@ -168,6 +204,8 @@ export function setupSlider(canvasPlacementElement: Element, label: string, opti
 
   sliderElem.addEventListener("input", handleChange);
   sliderElem.addEventListener("change", handleChange);
+
+  return singleControlElement;
 }
 
 function getOrCreateControlGroup(relativeContainer: Element): Element {
