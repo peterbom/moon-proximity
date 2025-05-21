@@ -45,7 +45,7 @@ import type { Perigee, State } from "../state-types";
 import { overlay } from "../styles/site.module.css";
 import { AstronomicalTime, getAstronomicalTime } from "../time";
 import { createVertexAttribsInfo } from "../webgl/attributes";
-import { addMouseListeners } from "../webgl/canvas-interaction";
+import { addZoomHandler } from "../webgl/canvas-interaction";
 import { MultiViewContext } from "../webgl/context";
 import type { CanvasCoordinates, ScreenRect } from "../webgl/dimension-types";
 import { addDragHandlers, DragData } from "../webgl/drag-interaction";
@@ -359,9 +359,9 @@ function runWithDate(
     context.multiSceneDrawer.requestRedraw(context.virtualCanvas);
   }
 
-  function handleZoom(_coords: CanvasCoordinates, delta: number) {
+  function handleZoom(_coords: CanvasCoordinates, distanceScaleFactor: number) {
     const allowedDistance = viewInfo.cameraDistance - earthEquatorialRadius - viewInfo.nearLimit;
-    const newDistance = allowedDistance * (1 + Math.sign(delta) * 0.1) + earthEquatorialRadius + viewInfo.nearLimit;
+    const newDistance = allowedDistance * distanceScaleFactor + earthEquatorialRadius + viewInfo.nearLimit;
     viewInfo.cameraDistance = newDistance;
     context.multiSceneDrawer.requestRedraw(context.virtualCanvas);
   }
@@ -536,7 +536,7 @@ function runWithDate(
   );
 
   cleanup.add(addDragHandlers(context.combinedCanvas, context.virtualCanvas, handleMouseDrag));
-  cleanup.add(addMouseListeners(context.combinedCanvas, context.virtualCanvas, { scroll: handleZoom }));
+  cleanup.add(addZoomHandler(context.combinedCanvas, context.virtualCanvas, handleZoom));
   cleanup.add(
     createMouseMovePicking(context.combinedCanvas, context.virtualCanvas, viewResources.pickingRenderTarget, {
       hover: handleMousePick,

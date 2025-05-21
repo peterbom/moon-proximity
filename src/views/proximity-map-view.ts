@@ -29,7 +29,7 @@ import type { PositionOnTile } from "../map-tiling/tile-types";
 import { ProximityTerrainData, TerrainLocation } from "../proximity-terrain-data";
 import type { State, TerrainLocationData } from "../state-types";
 import { overlay } from "../styles/site.module.css";
-import { addMouseListeners } from "../webgl/canvas-interaction";
+import { addZoomHandler } from "../webgl/canvas-interaction";
 import type { MultiViewContext } from "../webgl/context";
 import type { CanvasCoordinates, ScreenRect } from "../webgl/dimension-types";
 import { addDragHandlers, DragData } from "../webgl/drag-interaction";
@@ -334,9 +334,8 @@ function runWithReadyResources(context: MultiViewContext, state: State, resource
     context.multiSceneDrawer.requestRedraw(context.virtualCanvas);
   }
 
-  function handleZoom(_coords: CanvasCoordinates, delta: number) {
-    const scaleFactor = 1 + Math.sign(delta) * 0.1;
-    viewInfo.cameraDistance *= scaleFactor;
+  function handleZoom(_coords: CanvasCoordinates, distanceScaleFactor: number) {
+    viewInfo.cameraDistance *= distanceScaleFactor;
     context.multiSceneDrawer.requestRedraw(context.virtualCanvas);
   }
 
@@ -501,7 +500,7 @@ function runWithReadyResources(context: MultiViewContext, state: State, resource
   );
 
   cleanup.add(addDragHandlers(context.combinedCanvas, context.virtualCanvas, handleMouseDrag));
-  cleanup.add(addMouseListeners(context.combinedCanvas, context.virtualCanvas, { scroll: handleZoom }));
+  cleanup.add(addZoomHandler(context.combinedCanvas, context.virtualCanvas, handleZoom));
   cleanup.add(
     createMouseMovePicking(context.combinedCanvas, context.virtualCanvas, resources.positionPickingRenderTarget, {
       hover: handlePickHover,

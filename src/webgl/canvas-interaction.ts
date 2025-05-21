@@ -1,13 +1,91 @@
 import type { Cleaner } from "../common/cleanup";
+import type { Vector2 } from "../common/numeric-types";
+import { getMagnitude, subtractVectors } from "../common/vectors";
 import type { CanvasCoordinates, CanvasViewportDimensions, ScreenRect } from "./dimension-types";
 
+export type ZoomHandler = (coords: CanvasCoordinates, distanceScaleFactor: number) => void;
+
+export function addZoomHandler(
+  combinedCanvas: HTMLCanvasElement,
+  virtualCanvas: HTMLElement,
+  handler: ZoomHandler
+): Cleaner {
+  // See: https://developer.mozilla.org/en-US/docs/Web/API/Pointer_events/Pinch_zoom_gestures
+  const cachedEvents = new Map<number, PointerEvent>();
+  let prevPointerDistance = 0;
+
+  virtualCanvas.addEventListener("wheel", wheelHandler);
+  virtualCanvas.addEventListener("pointerdown", pointerdownHandler);
+  virtualCanvas.addEventListener("pointermove", pointermoveHandler);
+  virtualCanvas.addEventListener("pointerup", pointerupHandler);
+  virtualCanvas.addEventListener("pointercancel", pointerupHandler);
+  virtualCanvas.addEventListener("pointerout", pointerupHandler);
+  virtualCanvas.addEventListener("pointerleave", pointerupHandler);
+
+  return {
+    clean() {
+      virtualCanvas.removeEventListener("wheel", wheelHandler);
+      virtualCanvas.removeEventListener("pointerdown", pointerdownHandler);
+      virtualCanvas.removeEventListener("pointermove", pointermoveHandler);
+      virtualCanvas.removeEventListener("pointerup", pointerupHandler);
+      virtualCanvas.removeEventListener("pointercancel", pointerupHandler);
+      virtualCanvas.removeEventListener("pointerout", pointerupHandler);
+      virtualCanvas.removeEventListener("pointerleave", pointerupHandler);
+    },
+  };
+
+  function wheelHandler(e: WheelEvent) {
+    e.preventDefault(); // prevent scrolling
+    const coordinates = makeCanvasCoordinates(e, getCanvasViewportDimensions(combinedCanvas, virtualCanvas));
+    const distanceScaleFactor = 1 + Math.sign(e.deltaY) * 0.1; // +ve delta = scroll down = -ve zoom = increased distance
+    handler(coordinates, distanceScaleFactor);
+  }
+
+  function pointerdownHandler(e: PointerEvent) {
+    cachedEvents.set(e.pointerId, e);
+  }
+
+  function pointermoveHandler(e: PointerEvent) {
+    // Find this event in the cache and update its record with this event
+    cachedEvents.set(e.pointerId, e);
+
+    // If two pointers are down, check for pinch gestures
+    const events = [...cachedEvents.values()];
+    if (events.length === 2) {
+      // Calculate the distance between the two pointers
+      const pos0: Vector2 = [events[0].clientX, events[0].clientY];
+      const pos1: Vector2 = [events[1].clientX, events[1].clientY];
+      const pointerDistance = getMagnitude(subtractVectors(pos1, pos0));
+
+      if (prevPointerDistance > 0 && pointerDistance !== prevPointerDistance) {
+        const coordinates = makeCanvasCoordinates(e, getCanvasViewportDimensions(combinedCanvas, virtualCanvas));
+        const zoomIncrease = (pointerDistance - prevPointerDistance) / prevPointerDistance;
+        // Zoom 'distance' decreases with increasing zoom.
+        const distanceScaleFactor = 1 - zoomIncrease;
+        handler(coordinates, distanceScaleFactor);
+      }
+
+      // Cache the distance for the next move event
+      prevPointerDistance = pointerDistance;
+    }
+  }
+
+  function pointerupHandler(e: PointerEvent) {
+    // Remove this pointer from the cache
+    cachedEvents.delete(e.pointerId);
+
+    // If the number of pointers down is less than two then reset diff tracker
+    if (cachedEvents.size < 2) {
+      prevPointerDistance = 0;
+    }
+  }
+}
+
 export type MoveHandler = (coords: CanvasCoordinates) => void;
-export type ScrollHandler = (coords: CanvasCoordinates, delta: number) => void;
 export type ClickHandler = (coords: CanvasCoordinates) => void;
 
 export interface MouseEventListeners {
   move?: MoveHandler;
-  scroll?: ScrollHandler;
   click?: ClickHandler;
 }
 
@@ -17,7 +95,6 @@ export function addMouseListeners(
   listeners: MouseEventListeners
 ): Cleaner {
   const moveHandler = listeners.move;
-  const scrollHandler = listeners.scroll;
   const clickHandler = listeners.click;
 
   const cleaners: (() => void)[] = [];
@@ -25,12 +102,6 @@ export function addMouseListeners(
     const listener = (e: MouseEvent) => handleMouseMove(e, combinedCanvas, virtualCanvas, moveHandler);
     virtualCanvas.addEventListener("mousemove", listener, false);
     cleaners.push(() => virtualCanvas.removeEventListener("mousemove", listener, false));
-  }
-
-  if (scrollHandler) {
-    const listener = (e: WheelEvent) => handleScroll(e, combinedCanvas, virtualCanvas, scrollHandler);
-    virtualCanvas.addEventListener("wheel", listener, false);
-    cleaners.push(() => virtualCanvas.removeEventListener("wheel", listener, false));
   }
 
   if (clickHandler) {
@@ -55,19 +126,6 @@ export function addMouseListeners(
     if (coordinates.withinGLViewport) {
       handler(coordinates);
     }
-  }
-
-  function handleScroll(
-    e: WheelEvent,
-    combinedCanvas: HTMLCanvasElement,
-    virtualCanvas: HTMLElement,
-    handler: ScrollHandler
-  ) {
-    const coordinates = makeCanvasCoordinates(e, getCanvasViewportDimensions(combinedCanvas, virtualCanvas));
-    if (coordinates.withinGLViewport) {
-      handler(coordinates, e.deltaY);
-    }
-    e.preventDefault();
   }
 
   function handleMouseClick(
@@ -145,7 +203,7 @@ export function addTouchEventListeners(
     const coordinates = makeCanvasCoordinates(touch, getCanvasViewportDimensions(combinedCanvas, virtualCanvas));
     const preventDefault = listeners.begin(coordinates, e.timeStamp);
 
-    if (preventDefault) e.preventDefault();
+    if (preventDefault && e.cancelable) e.preventDefault();
     return preventDefault;
   }
 
