@@ -11,6 +11,7 @@ export type State = {
   selectedPerigee: NotifiableProperty<Perigee | null>;
   proximityShapeData: NotifiableProperty<ProximityShapeData | null>;
   terrainLocationData: NotifiableProperty<TerrainLocationData | null>;
+  savedPoints: NotifiableProperty<SavedPoint[]>;
 };
 
 export type DatePosition = {
@@ -39,4 +40,12 @@ export type TerrainLocationData = {
   distanceToMoonInKm: number;
   relativeProximityInKm: number;
   optimalDate: Date;
+};
+
+export type SavedPoint = {
+  longitudeDegrees: number;
+  latitudeDegrees: number;
+  altitudeInM: number;
+  distanceToMoonInKm: number;
+  idealUnixTime: number; // For serialization
 };

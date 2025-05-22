@@ -1,3 +1,4 @@
+import { splitByProperty } from "./iteration";
 import { Vector4 } from "./numeric-types";
 import {
   absolute,
@@ -46,6 +47,65 @@ export function getElementByIdOrError<TElem extends HTMLElement>(id: string): TE
   }
 
   return elem as TElem;
+}
+
+export function createNumericInput(
+  value: number,
+  min: number,
+  max: number,
+  decimalPlaces: number,
+  handleChange?: (value: number) => void
+): HTMLInputElement {
+  const stepsPerUnit = Math.pow(10, decimalPlaces);
+  const input = document.createElement("input");
+  input.type = "number";
+  input.min = min.toString();
+  input.max = max.toString();
+  input.step = (1 / stepsPerUnit).toString();
+  input.value = (Math.round(value * stepsPerUnit) / stepsPerUnit).toString();
+
+  const parse = decimalPlaces > 0 ? parseFloat : parseInt;
+
+  if (handleChange) {
+    input.addEventListener("change", () => handleChange(parse(input.value)));
+  }
+
+  return input;
+}
+
+export type ElemsWithData<TElems, TData> = {
+  elems: TElems;
+  data: TData;
+};
+
+export function updateElementsFromData<TElems, TData>(
+  elemsWithDataItems: ElemsWithData<TElems, TData>[],
+  dataItems: TData[],
+  parentElem: Element,
+  getChild: (elems: TElems) => Element,
+  createElem: (rowData: TData) => TElems
+): ElemsWithData<TElems, TData>[] {
+  // Remove elements not in the data.
+  const { matching: toInclude, notMatching: toDelete } = splitByProperty(
+    elemsWithDataItems,
+    (e) => dataItems.indexOf(e.data) >= 0
+  );
+
+  toDelete.forEach((e) => parentElem.removeChild(getChild(e.elems)));
+
+  // Add missing items from the data.
+  const result: ElemsWithData<TElems, TData>[] = [];
+  for (const data of dataItems) {
+    const pair = toInclude.find((e) => e.data === data);
+    if (pair === undefined) {
+      result.push({ data, elems: createElem(data) });
+    } else {
+      result.push(pair);
+      parentElem.appendChild(getChild(pair.elems));
+    }
+  }
+
+  return result;
 }
 
 export function asCssColor(color: Vector4): string {

@@ -2,6 +2,10 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="default-src 'self' https://corsproxy.io; style-src 'self' 'unsafe-inline';"
+  />
   <link href="./index.css" rel="stylesheet" type="text/css" />
 </head>
 
@@ -165,7 +169,7 @@
     <p data-selection="perigee">
       The red pin indicates the best guess for the perfect position. More pins can be added using the "pins" slider. As
       you pan around or select pins, the selected position (indicated by the vertical line pointing to the Moon) will
-      change, updating the summary data and Google Earth link below.
+      change, updating an entry in the collated data below.
     </p>
     <p data-mode="long" data-selection="perigee">
       The pin location and height accuracy are unfortunately limited by the resolution of the height map data: one
@@ -182,34 +186,33 @@
       This can be useful in conjunction with the sliders for rotating and tilting the view, as well as panning and
       scrolling to zoom in on promising terrain features.
     </p>
-    <div id="summary-view" data-selection="location">
-      <h3>Summary</h3>
-      <dl class="inline-term">
-        <dt>Distance</dt>
-        <dd data-var="dist"></dd>
-        <dt>Latitude</dt>
-        <dd data-var="lat"></dd>
-        <dt>Longitude</dt>
-        <dd data-var="lon"></dd>
-        <dt>Elevation</dt>
-        <dd data-var="elev"></dd>
-        <dt>Date</dt>
-        <dd data-var="date"></dd>
-        <dt>Google Earth</dt>
-        <dd data-var="earth"><a href="#" target="_blank" rel="noopener noreferrer">Open</a></dd>
-      </dl>
-    </div>
 
-    <h2 data-selection="location">Next Steps</h2>
+    <h2 data-selection="location">Collation</h2>
     <p data-selection="location">
-      I think we're a little closer to answering the question we set out with, but we haven't <em>quite</em> got a
-      definite answer. There's still some exploring to do, online or in real life.
+      Here we can check our calculations against <a href="https://ssd.jpl.nasa.gov/horizons/app.html">Horizons</a>. The
+      'verify' button in the table below will do that for us.
     </p>
     <p data-selection="location">
-      After finding a promising candidate perfect position and time, we can punch it into the
-      <a href="https://ssd.jpl.nasa.gov/horizons/app.html">Horizons</a> app to check the distance to the Moon for real.
-      (TODO: We should be able to call the API from here...)
+      The links to Google Earth will allow us to explore the area and maybe find some higher ground that our data is
+      missing. The longitude, latitude and altitude are editable, so you can copy any improved values back in and verify
+      them. There is also a 'save' button so you can store and compare locations and times from different perigees.
     </p>
+    <div id="summary-view" data-selection="location">
+      <table>
+        <thead>
+          <tr>
+            <th>Longitude</th>
+            <th>Latitude</th>
+            <th>Elevation</th>
+            <th>Ideal Time</th>
+            <th>Distance</th>
+            <th>Google Earth</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="summary-table-body"></tbody>
+      </table>
+    </div>
   </div>
 
   <footer>

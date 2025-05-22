@@ -12,6 +12,7 @@ import { run as runSummaryView } from "./views/summary-view";
 import { DelayedProperty, NotifiableProperty } from "./common/state-properties";
 import { graphicRect, graphicSquare } from "./styles/graphics.module.css";
 import { hidden } from "./styles/site.module.css";
+import { getSavedPoints } from "./storage";
 
 document.addEventListener("DOMContentLoaded", function () {
   const tldrCheckbox = getElementByIdOrError<HTMLInputElement>("tldr-checkbox");
@@ -21,6 +22,8 @@ document.addEventListener("DOMContentLoaded", function () {
   const combinedCanvas = createCombinedCanvas();
   const gl = getWebGLContext(combinedCanvas);
   const multiSceneDrawer = new MultiSceneDrawer(gl);
+
+  state.savedPoints.setValue(getSavedPoints()); // From local storage
 
   state.tldrView.subscribe(() => showHideElements(elementsByView));
   state.selectedPerigee.subscribe(() => showHideElements(elementsByView));
@@ -82,6 +85,7 @@ const state: State = {
   selectedPerigee: new NotifiableProperty(null),
   proximityShapeData: new NotifiableProperty(null),
   terrainLocationData: new NotifiableProperty(null),
+  savedPoints: new NotifiableProperty([]),
 };
 
 type ElementFunctionLookup = {
