@@ -355,9 +355,10 @@ function getGoogleEarthLink(
 }
 
 async function getVerifiedMinimumRange(data: EditingData): Promise<HorizonsResultRecord | null> {
+  const minutesEachSide = 15;
   const horizonsParams: HorizonsParams = {
     date: data.optimalDate,
-    timeWindowSeconds: 60 * 30, // 15 minutes each side
+    timeWindowSeconds: 60 * minutesEachSide * 2,
     sampleCount: 128,
     longitudeDegrees: data.longitudeDegrees,
     latitudeDegrees: data.latitudeDegrees,
