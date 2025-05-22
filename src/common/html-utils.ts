@@ -96,13 +96,9 @@ export function updateElementsFromData<TElems, TData>(
   // Add missing items from the data.
   const result: ElemsWithData<TElems, TData>[] = [];
   for (const data of dataItems) {
-    const pair = toInclude.find((e) => e.data === data);
-    if (pair === undefined) {
-      result.push({ data, elems: createElem(data) });
-    } else {
-      result.push(pair);
-      parentElem.appendChild(getChild(pair.elems));
-    }
+    const pair = toInclude.find((e) => e.data === data) || { data, elems: createElem(data) };
+    result.push(pair);
+    parentElem.appendChild(getChild(pair.elems));
   }
 
   return result;

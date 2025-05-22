@@ -16,6 +16,7 @@ import { IdGenerator } from "../common/id-generator";
 import { clamp, degToRad, makeScale, radToDeg } from "../common/math";
 import { compose4, makeViewProjectionMatrices } from "../common/matrices";
 import type { SphericalCoordinate, Vector3, Vector4 } from "../common/numeric-types";
+import { toFriendlyUTC } from "../common/text-utils";
 import { normalize, scaleVector } from "../common/vectors";
 import {
   applyTransformMatrix,
@@ -211,7 +212,7 @@ function runWithDate(
     min: -120,
     max: 120,
     displayVal(value) {
-      return new Date(selectedPerigee.date.getTime() + timeStepMs * value).toISOString();
+      return toFriendlyUTC(new Date(selectedPerigee.date.getTime() + timeStepMs * value));
     },
   });
 

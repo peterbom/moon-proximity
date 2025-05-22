@@ -30,3 +30,12 @@ export function replacePlaceholder(
 
   return text.replaceAll(re, replacement);
 }
+
+export function toFriendlyUTC(date: Date): string {
+  return (
+    date
+      .toISOString()
+      .replace("T", " ")
+      .replace(/\.\d+Z$/, "") + " UTC"
+  );
+}

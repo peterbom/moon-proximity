@@ -6,13 +6,41 @@
 }
 
 :global(input) {
-  background-color: black;
+  background: transparent;
   color: #ccc;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 7px 15px;
+  border: 1px solid #333;
+  field-sizing: content;
+}
+
+:global(input[type="number"]) {
+  -webkit-appearance: textfield;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+:global(input[type="number"]::-webkit-inner-spin-button),
+:global(input[type="number"]::-webkit-outer-spin-button) {
+  -webkit-appearance: none;
 }
 
 :global(button) {
-  background-color: black;
+  background: transparent;
   color: #ccc;
+  border-radius: 8px;
+  border-width: 0;
+  cursor: pointer;
+  margin: 0;
+  padding: 10px 12px;
+  text-align: center;
+  vertical-align: baseline;
+  user-select: none;
+}
+
+:global(button:hover) {
+  background-color: #222;
 }
 
 :global(.content) {
@@ -137,6 +165,88 @@
   width: 100%;
   max-width: 80rem;
   font-size: small;
+}
+
+/* https://codepen.io/AllThingsSmitty/pen/MyqmdM */
+:global(table) {
+  border: 1px solid #333;
+  border-collapse: collapse;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  table-layout: fixed;
+}
+
+:global(table caption) {
+  font-size: 1.5em;
+  margin: 0.5em 0 0.75em;
+}
+
+:global(table tr) {
+  background-color: #111;
+  border: 1px solid #333;
+  padding: 0.35em;
+}
+
+:global(table th),
+:global(table td) {
+  padding: 0.625em;
+  text-align: center;
+}
+
+:global(table th) {
+  font-size: 0.85em;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+@media screen and (max-width: 600px) {
+  :global(table) {
+    border: 0;
+  }
+
+  :global(table caption) {
+    font-size: 1.3em;
+  }
+
+  :global(table thead) {
+    border: none;
+    clip: rect(0 0 0 0);
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    padding: 0;
+    position: absolute;
+    width: 1px;
+  }
+
+  :global(table tr) {
+    border-bottom: 3px solid #333;
+    display: block;
+    margin-bottom: 0.625em;
+  }
+
+  :global(table td) {
+    border-bottom: 1px solid #333;
+    display: block;
+    font-size: 0.8em;
+    text-align: right;
+  }
+
+  :global(table td::before) {
+    /*
+    * aria-label has no advantage, it won't be read inside a table
+    content: attr(aria-label);
+    */
+    content: attr(data-label);
+    float: left;
+    font-weight: bold;
+    text-transform: uppercase;
+  }
+
+  :global(table td:last-child) {
+    border-bottom: 0;
+  }
 }
 
 .overlay {

@@ -1,4 +1,5 @@
 import { createTextOverlay, OverlayElement, setAbsoluteStyleRect } from "../common/html-utils";
+import { toFriendlyUTC } from "../common/text-utils";
 import type { Perigee } from "../state-types";
 import { overlay } from "../styles/site.module.css";
 
@@ -46,7 +47,7 @@ export function handlePerigeeMouseover(
 
   const angleExtraInfo = perigee.isSuperMoon ? "Super Moon" : perigee.isSuperNewMoon ? "Super New Moon" : "";
 
-  overlayElement.content.date.textContent = perigee.date.toISOString();
+  overlayElement.content.date.textContent = toFriendlyUTC(perigee.date);
   overlayElement.content.distance.textContent = perigee.distance.toFixed(2);
   overlayElement.content.angle.textContent = perigee.angleFromFullMoonDegrees.toFixed(1);
   overlayElement.content.angleInfo.textContent = angleExtraInfo;

@@ -38,7 +38,7 @@
       Earth, what position do we need to be at? And at exactly what time?
     </p>
 
-    <h2 data-mode="long">The Lunar Cycle</h2>
+    <h2>The Lunar Cycle</h2>
     <p data-mode="long">
       To get started, we need to know the times when the Moon is closest to the Earth. We'll temporarily shelve any
       questions about where on the surface of the Earth we'll need to be. Here's a chart of the Moon's distance from
@@ -151,7 +151,7 @@
       directions to align with the Earth's poles.
     </p>
 
-    <h2 data-mode="long" data-selection="perigee">Terrain</h2>
+    <h2 data-selection="perigee">Terrain</h2>
     <p data-mode="long" data-selection="perigee">
       This is all well and good, but rather than defacing Mother Earth with a giant highlighter, it would be nice to
       visualize the terrain of this area. We want to see <em>which</em> land features bring you closest to the Moon if
@@ -187,17 +187,19 @@
       scrolling to zoom in on promising terrain features.
     </p>
 
-    <h2 data-selection="location">Collation</h2>
-    <p data-selection="location">
-      Here we can check our calculations against <a href="https://ssd.jpl.nasa.gov/horizons/app.html">Horizons</a>. The
-      'verify' button in the table below will do that for us.
+    <h2 data-selection="collation">Collation</h2>
+    <p>Verify, save and compare locations here.</p>
+    <p data-mode="long" data-selection="collation">
+      The 'verify' button will check our calculations against
+      <a href="https://ssd.jpl.nasa.gov/horizons/app.html">Horizons</a>. If the moon reaches a minimum distance at the
+      specified location within 15 minutes of the selected time, you can save that result for later comparison.
     </p>
-    <p data-selection="location">
+    <p data-mode="long" data-selection="collation">
       The links to Google Earth will allow us to explore the area and maybe find some higher ground that our data is
       missing. The longitude, latitude and altitude are editable, so you can copy any improved values back in and verify
       them. There is also a 'save' button so you can store and compare locations and times from different perigees.
     </p>
-    <div id="summary-view" data-selection="location">
+    <div id="summary-view" data-selection="collation">
       <table>
         <thead>
           <tr>

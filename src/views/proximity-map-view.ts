@@ -13,6 +13,7 @@ import { getRange } from "../common/iteration";
 import { degToRad, makeScale, radToDeg } from "../common/math";
 import { compose4, makeViewProjectionMatrices } from "../common/matrices";
 import type { Vector2, Vector3, Vector4 } from "../common/numeric-types";
+import { toFriendlyUTC } from "../common/text-utils";
 import { addVectors } from "../common/vectors";
 import {
   applyTransforms,
@@ -424,7 +425,7 @@ function runWithReadyResources(context: MultiViewContext, state: State, resource
       const deltaSign = Math.sign(data.relativeProximityInKm) >= 0 ? "+" : "-";
       elems.deltaDist.textContent = `${deltaSign}${Math.abs(data.relativeProximityInKm).toFixed(3)}`;
 
-      elems.time.textContent = data.optimalDate.toISOString();
+      elems.time.textContent = toFriendlyUTC(data.optimalDate);
     }
   }
 

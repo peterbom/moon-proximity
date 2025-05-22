@@ -1,4 +1,5 @@
 import { createNumericInput, ElemsWithData, getElementByIdOrError, updateElementsFromData } from "../common/html-utils";
+import { toFriendlyUTC } from "../common/text-utils";
 import { getMinimumRangeFromHorizons, HorizonsParams, HorizonsResultRecord } from "../horizons";
 import type { SavedPoint, State, TerrainLocationData } from "../state-types";
 import { savePoints } from "../storage";
@@ -17,6 +18,7 @@ const tableRowContentHtml = `
   <td data-var="action">
     <button data-action="verify" aria-label="Verify with Horizons" title="Verify with Horizons">
       ${certificateIcon}
+      Verify
     </button>
     <button data-action="edit" aria-label="Edit" title="Edit">
       ${penIcon}
@@ -127,7 +129,10 @@ function runWithData(state: State, resources: ViewResources) {
   }
 
   function createTableRowWithData(data: RowData): TableRowElems {
-    const rowElems = createTableRow(resources.tableBody);
+    const trElem = document.createElement("tr");
+    trElem.innerHTML = tableRowContentHtml;
+    const rowElems = getTableRowElems(trElem);
+
     if (isEditingData(data)) {
       setTableRowEditing(rowElems, data, handleValueChange, handleVerify, handleSave);
     } else {
@@ -218,13 +223,6 @@ function runWithData(state: State, resources: ViewResources) {
   }
 }
 
-function createTableRow(tableBody: Element): TableRowElems {
-  const trElem = document.createElement("tr");
-  trElem.innerHTML = tableRowContentHtml;
-  tableBody.appendChild(trElem);
-  return getTableRowElems(trElem);
-}
-
 function setTableRowEditing(
   rowElems: TableRowElems,
   data: EditingData,
@@ -282,10 +280,10 @@ function setTableRowSaved(
   handleDelete: (point: SavedPoint, rowElems: TableRowElems) => void,
   handleEdit: (point: SavedPoint, rowElems: TableRowElems) => void
 ) {
-  rowElems.lon.textContent = `${point.longitudeDegrees.toFixed(6)} °`;
-  rowElems.lat.textContent = `${point.latitudeDegrees.toFixed(6)} °`;
+  rowElems.lon.textContent = `${point.longitudeDegrees.toFixed(6)}°`;
+  rowElems.lat.textContent = `${point.latitudeDegrees.toFixed(6)}°`;
   rowElems.elev.textContent = `${Math.round(point.altitudeInM).toLocaleString()} m`;
-  rowElems.time.textContent = new Date(point.idealUnixTime).toISOString();
+  rowElems.time.textContent = toFriendlyUTC(new Date(point.idealUnixTime));
   rowElems.dist.textContent = `${(Math.round(point.distanceToMoonInKm * 1000) / 1000).toLocaleString()}`;
   rowElems.earthLink.href = getGoogleEarthLink(
     point.longitudeDegrees,
@@ -313,7 +311,7 @@ function setTableRowSaved(
 
 function updateRowVerificationState(rowElems: TableRowElems, data: EditingData) {
   const resultRecord = data.horizonsResultRecord;
-  rowElems.time.textContent = resultRecord !== null ? resultRecord.date.toISOString() : "";
+  rowElems.time.textContent = resultRecord !== null ? toFriendlyUTC(resultRecord.date) : "";
   rowElems.dist.textContent =
     resultRecord !== null ? `${(Math.round(resultRecord.range * 1000) / 1000).toLocaleString()}` : "";
 

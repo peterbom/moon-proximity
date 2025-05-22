@@ -12,18 +12,24 @@ import { run as runSummaryView } from "./views/summary-view";
 import { DelayedProperty, NotifiableProperty } from "./common/state-properties";
 import { graphicRect, graphicSquare } from "./styles/graphics.module.css";
 import { hidden } from "./styles/site.module.css";
-import { getSavedPoints } from "./storage";
+import { getSavedPoints, getSavedTldr, saveTldr } from "./storage";
 
 document.addEventListener("DOMContentLoaded", function () {
+  // Load initial data from local storage
+  state.tldrView.setValue(getSavedTldr());
+  state.savedPoints.setValue(getSavedPoints());
+
   const tldrCheckbox = getElementByIdOrError<HTMLInputElement>("tldr-checkbox");
-  tldrCheckbox.addEventListener("change", () => state.tldrView.setValue(tldrCheckbox.checked));
+  tldrCheckbox.checked = state.tldrView.getValue();
+  tldrCheckbox.addEventListener("change", () => {
+    state.tldrView.setValue(tldrCheckbox.checked);
+    saveTldr(tldrCheckbox.checked);
+  });
 
   const elementsByView = getElementsByView();
   const combinedCanvas = createCombinedCanvas();
   const gl = getWebGLContext(combinedCanvas);
   const multiSceneDrawer = new MultiSceneDrawer(gl);
-
-  state.savedPoints.setValue(getSavedPoints()); // From local storage
 
   state.tldrView.subscribe(() => showHideElements(elementsByView));
   state.selectedPerigee.subscribe(() => showHideElements(elementsByView));
@@ -105,7 +111,7 @@ type ElementsByView = {
   tldrElems: NodeListOf<HTMLElement>;
   longElems: NodeListOf<HTMLElement>;
   perigeeDependentElems: NodeListOf<HTMLElement>;
-  locationDependentElems: NodeListOf<HTMLElement>;
+  collationDependentElems: NodeListOf<HTMLElement>;
 };
 
 function getElementsByView(): ElementsByView {
@@ -118,7 +124,7 @@ function getElementsByView(): ElementsByView {
     tldrElems: contentElem.querySelectorAll("[data-mode='tldr']"),
     longElems: contentElem.querySelectorAll("[data-mode='long']"),
     perigeeDependentElems: contentElem.querySelectorAll("[data-selection='perigee']"),
-    locationDependentElems: contentElem.querySelectorAll("[data-selection='location']"),
+    collationDependentElems: contentElem.querySelectorAll("[data-selection='collation']"),
   };
 }
 
@@ -127,18 +133,18 @@ function showHideElements(elementsByView: ElementsByView) {
 
   const isTldrView = state.tldrView.getValue();
   const isPerigeeSelected = state.selectedPerigee.getValue() !== null;
-  const isLocationSelected = isPerigeeSelected && state.terrainLocationData.getValue() !== null;
+  const hasCollationData = state.terrainLocationData.getValue() !== null || state.savedPoints.getValue().length > 0;
 
   elementsByView.tldrElems.forEach((elem) => !isTldrView && hiddenElems.add(elem));
   elementsByView.longElems.forEach((elem) => isTldrView && hiddenElems.add(elem));
   elementsByView.perigeeDependentElems.forEach((elem) => !isPerigeeSelected && hiddenElems.add(elem));
-  elementsByView.locationDependentElems.forEach((elem) => !isLocationSelected && hiddenElems.add(elem));
+  elementsByView.collationDependentElems.forEach((elem) => !hasCollationData && hiddenElems.add(elem));
 
   const allElems = [
     ...elementsByView.tldrElems,
     ...elementsByView.longElems,
     ...elementsByView.perigeeDependentElems,
-    ...elementsByView.locationDependentElems,
+    ...elementsByView.collationDependentElems,
   ];
 
   allElems.forEach((elem) => (hiddenElems.has(elem) ? elem.classList.add(hidden) : elem.classList.remove(hidden)));
