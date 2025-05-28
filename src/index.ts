@@ -1,5 +1,5 @@
 import { createCombinedCanvas, createDivInRelativeContainer, getElementByIdOrError } from "./common/html-utils";
-import { Ephemeris } from "./ephemeris";
+import { Ephemeris, SeriesMetadata, SeriesType } from "./ephemeris";
 import type { DateDistance, DatePosition, Perigee, State } from "./state-types";
 import { getWebGLContext, MultiViewContext } from "./webgl/context";
 import { MultiSceneDrawer } from "./webgl/multi-scene-drawer";
@@ -73,13 +73,13 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 
 async function getEphemeris(): Promise<Ephemeris> {
-  const response = await fetch("./resources/moon_eph.dat");
+  const response = await fetch("./resources/ephemeris.dat");
   if (!response.ok) {
     throw new Error(`Failed to fetch ephemeris data: ${response.status}`);
   }
 
   const buffer = await response.arrayBuffer();
-  return new Ephemeris(buffer);
+  return new Ephemeris(new DataView(buffer), ephemerisMetadata, ephemerisStartDate);
 }
 
 const state: State = {
@@ -149,3 +149,40 @@ function showHideElements(elementsByView: ElementsByView) {
 
   allElems.forEach((elem) => (hiddenElems.has(elem) ? elem.classList.add(hidden) : elem.classList.remove(hidden)));
 }
+
+const ephemerisStartDate = 2451536.5; // 1999-12-24T00:00:00.000Z
+const ephemerisMetadata = new Map<SeriesType, SeriesMetadata>([
+  [
+    SeriesType.SsbToEmb,
+    {
+      seriesType: 0,
+      intervalDurationDays: 16,
+      propertyCount: 3,
+      coeffCount: 13,
+      offset: 0,
+      sizeInBytes: 712608,
+    },
+  ],
+  [
+    SeriesType.EarthToMoon,
+    {
+      seriesType: 1,
+      intervalDurationDays: 4,
+      propertyCount: 3,
+      coeffCount: 13,
+      offset: 712608,
+      sizeInBytes: 2850432,
+    },
+  ],
+  [
+    SeriesType.SsbToSun,
+    {
+      seriesType: 2,
+      intervalDurationDays: 16,
+      propertyCount: 3,
+      coeffCount: 4,
+      offset: 3563040,
+      sizeInBytes: 219264,
+    },
+  ],
+]);

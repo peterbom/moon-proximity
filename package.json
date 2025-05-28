@@ -4,12 +4,15 @@
   "description": "",
   "scripts": {
     "dev": "node build dev",
+    "build:eph": "tsx ./build/create-ephemeris.ts",
     "build": "node build"
   },
   "devDependencies": {
     "@types/d3": "^7.4.3",
+    "@types/node": "^22.15.21",
     "d3": "^7.9.0",
     "esbuild": "^0.25.4",
+    "tsx": "^4.19.4",
     "typescript": "^5.8.3",
     "typescript-plugin-css-modules": "^5.1.0"
   }

@@ -1,8 +1,4 @@
-import {
-  getEarthLocalWorldTransforms,
-  getEclipticPlaneLocalWorldTransforms,
-  getLatLongPosition,
-} from "../calculations";
+import { getEarthAndMoonPositions, getEarthRotation, getEclipticPlane, getLatLongPosition } from "../calculations";
 import { Cleanup } from "../common/cleanup";
 import {
   createTextOverlay,
@@ -26,6 +22,7 @@ import {
   asTranslation,
   asYRotation,
   asZRotation,
+  getLocalWorldTransforms,
   getNormalTransformSeries,
   getTransformSeriesMatrix,
   LocalWorldTransforms,
@@ -637,13 +634,20 @@ function getCommonLitObjectUniformValues(
 function getSceneInfo(ephemeris: Ephemeris, date: Date): SceneInfo {
   const time = getAstronomicalTime(date);
 
-  const eclipticPlaneLocalWorldTransforms = getEclipticPlaneLocalWorldTransforms(ephemeris, time);
-  const earthRotation = ephemeris.getEarthRotation(time);
+  const { positions: embPos, velocities: embVel } = ephemeris.getSsbToEmb(time.julianDays);
+  const eclipticPlane = getEclipticPlane(embPos as Vector3, embVel as Vector3);
+  const eclipticPlaneLocalWorldTransforms = getLocalWorldTransforms([eclipticPlane.rotation]);
 
-  const sunPosition = ephemeris.getSunPosition(time);
-  const earthMoonBarycenterPosition = ephemeris.getEarthMoonBarycenterPosition(time);
-  const { moonPosition, earthPosition } = ephemeris.getEarthAndMoonPositions(earthMoonBarycenterPosition, time);
-  const earthLocalWorldTransforms = getEarthLocalWorldTransforms(ephemeris, time, earthPosition);
+  const ssbToSun = ephemeris.getSsbToSun(time.julianDays);
+  const sunPosition = ssbToSun.positions as Vector3;
+
+  const { moonPosition, earthPosition } = getEarthAndMoonPositions(ephemeris, time);
+
+  const earthRotation = getEarthRotation(time);
+  const earthLocalWorldTransforms = getLocalWorldTransforms([
+    ...earthRotation.transforms,
+    asTranslation(earthPosition),
+  ]);
 
   const [localMoonPosition, localSunPosition] = applyTransformMatrix(
     earthLocalWorldTransforms.worldToLocalMatrix,

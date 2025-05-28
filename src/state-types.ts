@@ -1,5 +1,6 @@
+import { EarthMoonPositions } from "./calculations";
 import { DelayedProperty, NotifiableProperty } from "./common/state-properties";
-import { EarthMoonPositions, Ephemeris } from "./ephemeris";
+import { Ephemeris } from "./ephemeris";
 import { ProximityShapeData } from "./geo-shape-data";
 
 export type State = {

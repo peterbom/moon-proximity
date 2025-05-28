@@ -1,4 +1,9 @@
-import { getEarthRadiusAtPosition, getLatLongPosition } from "./calculations";
+import {
+  getEarthAndMoonPositions,
+  getEarthRadiusAtPosition,
+  getEarthRotation,
+  getLatLongPosition,
+} from "./calculations";
 import { maxByProperty } from "./common/iteration";
 import { compose4, makeTranslation4, transpose4 } from "./common/matrices";
 import { Vector3 } from "./common/numeric-types";
@@ -88,10 +93,8 @@ function getWorkingProximityPoints(
 }
 
 function getWorkingProximityPoint(ephemeris: Ephemeris, time: AstronomicalTime): WorkingProximityPoint {
-  const earthMoonBarycenterPosition = ephemeris.getEarthMoonBarycenterPosition(time);
-  const worldPositions = ephemeris.getEarthAndMoonPositions(earthMoonBarycenterPosition, time);
-
-  const worldEarthRotation = ephemeris.getEarthRotation(time);
+  const worldPositions = getEarthAndMoonPositions(ephemeris, time);
+  const worldEarthRotation = getEarthRotation(time);
   const localRotationMatrix = transpose4(getTransformSeriesMatrix(worldEarthRotation.transforms));
   const localTranslationMatrix = makeTranslation4(...subtractVectors([0, 0, 0], worldPositions.earthPosition));
   const localMatrix = compose4(localTranslationMatrix, localRotationMatrix);

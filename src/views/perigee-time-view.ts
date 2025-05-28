@@ -8,8 +8,9 @@ import { createPerigeeOverlay, handlePerigeeMouseout, handlePerigeeMouseover } f
 import { D3ScaleTime } from "./d3-alias-types";
 import { Ephemeris } from "../ephemeris";
 import { getBestQualitySampleRanges, QualitySample, refine } from "../common/peak-detection";
-import { getAngleFromFullMoon, getCosAngleFromFullMoon, getDistance, getEarthMoonPositions } from "../calculations";
+import { getAngleFromFullMoon, getCosAngleFromFullMoon, getDistance, getEarthAndMoonPositions } from "../calculations";
 import { scaleVector } from "../common/vectors";
+import { getAstronomicalTime } from "../time";
 
 const lineColor = asCssColor([...moonlightColor, 1]);
 const moonCircleColor = asCssColor([...moonlightColor, 1]);
@@ -244,7 +245,7 @@ function getPerigeePositions(ephemeris: Ephemeris, dateDistances: DateDistance[]
     refine(
       range,
       (unixTime) => {
-        const positions = getEarthMoonPositions(ephemeris, unixTime);
+        const positions = getEarthAndMoonPositions(ephemeris, getAstronomicalTime(new Date(unixTime)));
         return -getDistance(positions);
       },
       peakRangeThresholdSeconds
@@ -252,7 +253,7 @@ function getPerigeePositions(ephemeris: Ephemeris, dateDistances: DateDistance[]
   );
 
   return troughs.map<UnixTimeDistanceAngle>((t) => {
-    const positions = getEarthMoonPositions(ephemeris, t.value);
+    const positions = getEarthAndMoonPositions(ephemeris, getAstronomicalTime(new Date(t.value)));
     const angleFromFullMoon = getAngleFromFullMoon(positions);
     return {
       unixTime: t.value,
@@ -280,7 +281,7 @@ function getClosestAngleDates(
   });
 
   function getProximityToAngle(unixTime: number): number {
-    const positions = getEarthMoonPositions(ephemeris, unixTime);
+    const positions = getEarthAndMoonPositions(ephemeris, getAstronomicalTime(new Date(unixTime)));
     const cosAngle = getCosAngleFromFullMoon(positions);
     return -Math.abs(cosAngle - cosTargetAngle);
   }

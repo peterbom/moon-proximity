@@ -6,13 +6,14 @@ Line chart based on:
 
 import { axisBottom, axisLeft, create, curveNatural, extent, line, scaleLinear, scaleUtc, zoom } from "d3";
 import type { D3ZoomEvent } from "d3";
-import { getDistance, getEarthMoonPositions } from "../calculations";
+import { getDistance, getEarthAndMoonPositions } from "../calculations";
 import { asCssColor } from "../common/html-utils";
 import { seqStep } from "../common/iteration";
 import { displayEndDate, displayStartDate, highlightColor } from "../constants";
 import type { DateDistance, DatePosition, State } from "../state-types";
 import type { D3ScaleTime } from "./d3-alias-types";
 import { Ephemeris } from "../ephemeris";
+import { getAstronomicalTime } from "../time";
 
 const lineColor = asCssColor([...highlightColor, 1]);
 
@@ -127,7 +128,7 @@ function getDatePositionsAndDistances(ephemeris: Ephemeris): {
   const datePositions = seqStep(displayStartDate.getTime(), displayEndDate.getTime(), 1000 * 60 * 60 * 24).map(
     (unixTime) => {
       const date = new Date(unixTime);
-      const position = getEarthMoonPositions(ephemeris, unixTime);
+      const position = getEarthAndMoonPositions(ephemeris, getAstronomicalTime(date));
       return { date, position };
     }
   );

@@ -8,6 +8,7 @@ const sharedConfig = {
   loader: {
     ".html": "copy",
     ".dat": "copy",
+    ".440": "empty",
     ".jpg": "copy",
     ".png": "copy",
     ".md": "empty",

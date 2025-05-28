@@ -1,36 +1,101 @@
 import type { Vector2, Vector3 } from "./common/numeric-types";
-import { dotProduct3, getMagnitude, normalize, subtractVectors } from "./common/vectors";
-import { asTranslation, getLocalWorldTransforms, LocalWorldTransforms } from "./common/xform";
+import { crossProduct3, dotProduct3, getMagnitude, normalize, subtractVectors } from "./common/vectors";
+import {
+  applyTransforms,
+  asXRotation,
+  asYRotation,
+  asZRotation,
+  RotationOnAxis,
+  TransformSeries,
+  TransformType,
+} from "./common/xform";
 import { earthEquatorialRadius, earthPolarRadius } from "./constants";
-import { EarthMoonPositions, Ephemeris } from "./ephemeris";
+import { Ephemeris } from "./ephemeris";
 import { LatLongPosition } from "./geo-types";
 import { AstronomicalTime, getAstronomicalTime } from "./time";
 
-export function getEarthMoonPositions(ephemeris: Ephemeris, unixTime: number): EarthMoonPositions {
-  const date = new Date(unixTime);
-  const time = getAstronomicalTime(date);
-  const earthMoonBarycenterPosition = ephemeris.getEarthMoonBarycenterPosition(time);
-  return ephemeris.getEarthAndMoonPositions(earthMoonBarycenterPosition, time);
+export type EarthMoonPositions = {
+  moonPosition: Vector3;
+  earthPosition: Vector3;
+};
+
+export type EarthRotation = {
+  axis: Vector3;
+  axialAngle: number;
+  transforms: TransformSeries;
+};
+
+export type EclipticPlane = {
+  rotation: RotationOnAxis;
+  up: Vector3;
+};
+
+const radiansPerArcsecond = Math.PI / (180 * 60 * 60);
+
+export function getEarthAndMoonPositions(ephemeris: Ephemeris, time: AstronomicalTime): EarthMoonPositions {
+  const ssbToEmb = ephemeris.getSsbToEmb(time.julianDays);
+  const earthToMoon = ephemeris.getEarthToMoon(time.julianDays);
+  const ssbToEarth = ephemeris.getSsbToEarth(ssbToEmb, earthToMoon);
+  const ssbToMoon = ephemeris.getSsbToMoon(ssbToEarth, earthToMoon);
+
+  const earthPosition = ssbToEarth.positions as Vector3;
+  const moonPosition = ssbToMoon.positions as Vector3;
+
+  return { earthPosition, moonPosition };
 }
 
-export function getEarthLocalWorldTransforms(
-  ephemeris: Ephemeris,
-  time: AstronomicalTime,
-  earthWorldPosition: Vector3
-): LocalWorldTransforms {
-  const toWorldRotation = ephemeris.getEarthRotation(time);
-  const localToWorldTransforms = [...toWorldRotation.transforms, asTranslation(earthWorldPosition)];
-  return getLocalWorldTransforms(localToWorldTransforms);
+export function getEarthRotation(time: AstronomicalTime): EarthRotation {
+  // Apply the following rotations in order:
+  // - Z: axial
+  // - X: obliquity
+  // - Z: -zeta
+  // - Y: theta
+  // - Z: -z
+
+  // The axial (Z) rotation is the regular daily rotation amount.
+  // https://en.wikipedia.org/wiki/Sidereal_time#ERA
+  const axialZ = (2 * Math.PI * (0.779057273264 + 1.00273781191135448 * time.j2000Days)) % (2 * Math.PI);
+
+  // https://en.wikipedia.org/wiki/Axial_tilt
+  // ε = [23°26′21.448″] − 46.8150″ T − 0.00059″ T^2 + 0.001813″ T^3
+  // We can skip the initial axial tilt of ~23° because the model is based on the J2000
+  // reference frame, whose axes are aligned with the Earth's equator at 2000-01-01T12:00Z.
+  const t = time.j2000Days / 36525;
+  const obliquityX = (-46.815 * t - 0.00059 * t * t + 0.001813 * t * t * t) * radiansPerArcsecond;
+
+  // https://www.celestialprogramming.com/snippets/precessionMeeus.html
+  // TODO: Consider AIU2006 (https://www.celestialprogramming.com/snippets/precessionIAU2006.html)
+  const zeta = (2306.2181 * t + 0.30188 * t * t + 0.017998 * t * t * t) * radiansPerArcsecond;
+  const z = (2306.2181 * t + 1.09468 * t * t + 0.018203 * t * t * t) * radiansPerArcsecond;
+  const theta = (2004.3109 * t - 0.42665 * t * t - 0.041833 * t * t * t) * radiansPerArcsecond;
+
+  const transforms = [
+    asZRotation(axialZ),
+    asXRotation(obliquityX),
+    asZRotation(-zeta),
+    asYRotation(theta),
+    asZRotation(-z),
+  ];
+
+  const axialAngle = axialZ - zeta - z;
+  const [axis] = applyTransforms(transforms, [0, 0, 1]);
+  return { transforms, axialAngle, axis };
 }
 
-export function getEclipticPlaneLocalWorldTransforms(
-  ephemeris: Ephemeris,
-  time: AstronomicalTime
-): LocalWorldTransforms {
-  const embPos = ephemeris.getEarthMoonBarycenterPosition(time);
-  const embVel = ephemeris.getEarthMoonBarycenterVelocity(time);
-  const eclipticPlane = ephemeris.getEclipticPlane(embPos, embVel);
-  return getLocalWorldTransforms([eclipticPlane.rotation]);
+export function getEclipticPlane(embPos: Vector3, embVel: Vector3): EclipticPlane {
+  const eclipticX = normalize(embPos);
+  const eclipticZ = normalize(crossProduct3(embPos, embVel));
+  const eclipticY = crossProduct3(eclipticX, eclipticZ);
+
+  // prettier-ignore
+  const matrix = [
+      ...eclipticX, 0,
+      ...eclipticY, 0,
+      ...eclipticZ, 0,
+      0, 0, 0, 1
+    ];
+
+  return { rotation: { type: TransformType.RotationOnAxis, matrix }, up: eclipticZ };
 }
 
 export function getDistance(positions: EarthMoonPositions): number {
