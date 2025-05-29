@@ -45,7 +45,11 @@ export function handlePerigeeMouseover(
     top: cssY,
   });
 
-  const angleExtraInfo = perigee.isSuperMoon ? "Super Moon" : perigee.isSuperNewMoon ? "Super New Moon" : "";
+  const angleExtraInfo = perigee.isSuperMoon
+    ? `${perigee.hoursFromFullMoon.toFixed(1)} hours from Super Moon`
+    : perigee.isSuperNewMoon
+    ? `${perigee.hoursFromNewMoon.toFixed(1)} hours from Super New Moon`
+    : "";
 
   overlayElement.content.date.textContent = toFriendlyUTC(perigee.date);
   overlayElement.content.distance.textContent = perigee.distance.toFixed(2);

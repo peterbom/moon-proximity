@@ -1,18 +1,48 @@
 import { maxByProperty, seqStep } from "./iteration";
 
-export type QualitySample = {
+export function getPeaks<TObj>(
+  objects: TObj[],
+  getValue: (obj: TObj) => number,
+  getQuality: (obj: TObj) => number,
+  createObject: (value: number) => TObj,
+  valueRange: number
+): PeakObject<TObj>[] {
+  const samples: QualitySample<TObj>[] = objects.map((obj) => ({
+    obj,
+    value: getValue(obj),
+    quality: getQuality(obj),
+  }));
+  const peakRanges = getBestQualitySampleRanges(samples);
+  return peakRanges.map<PeakObject<TObj>>((range) => {
+    const refinedSample = refine(range, getQuality, createObject, valueRange);
+    return {
+      closestSource: range.peak.obj,
+      peak: refinedSample.obj,
+      quality: refinedSample.quality,
+    };
+  });
+}
+
+export type PeakObject<TObj> = {
+  peak: TObj;
+  closestSource: TObj;
+  quality: number;
+};
+
+type QualitySample<TObj> = {
+  obj: TObj;
   value: number;
   quality: number;
 };
 
-export type QualitySampleRange = {
-  lowerBound: QualitySample;
-  peak: QualitySample;
-  upperBound: QualitySample;
+type QualitySampleRange<TObj> = {
+  lowerBound: QualitySample<TObj>;
+  peak: QualitySample<TObj>;
+  upperBound: QualitySample<TObj>;
 };
 
-export function getBestQualitySampleRanges(qualitySamples: QualitySample[]): QualitySampleRange[] {
-  const sampleRanges: QualitySampleRange[] = [];
+function getBestQualitySampleRanges<TObj>(qualitySamples: QualitySample<TObj>[]): QualitySampleRange<TObj>[] {
+  const sampleRanges: QualitySampleRange<TObj>[] = [];
   if (qualitySamples.length < 4) {
     throw new Error("Too few samples");
   }
@@ -37,21 +67,23 @@ export function getBestQualitySampleRanges(qualitySamples: QualitySample[]): Qua
   return sampleRanges;
 }
 
-export function refine(
-  sampleRange: QualitySampleRange,
-  getQuality: (value: number) => number,
+function refine<TObj>(
+  sampleRange: QualitySampleRange<TObj>,
+  getQuality: (obj: TObj) => number,
+  createObject: (value: number) => TObj,
   targetValueRange: number
-): QualitySample {
+): QualitySample<TObj> {
   const valueRange = sampleRange.upperBound.value - sampleRange.lowerBound.value;
   if (valueRange < targetValueRange) {
     // Reached target precision. Return the peak.
     return sampleRange.peak;
   }
 
-  const midSamples = seqStep(1, 3, 1).map<QualitySample>((proportion) => {
+  const midSamples = seqStep(1, 3, 1).map<QualitySample<TObj>>((proportion) => {
     const value = sampleRange.lowerBound.value + (proportion * valueRange) / 4;
-    const quality = getQuality(value);
-    return { value, quality };
+    const obj = createObject(value);
+    const quality = getQuality(obj);
+    return { obj, value, quality };
   });
 
   const samples = [sampleRange.lowerBound, ...midSamples, sampleRange.upperBound];
@@ -62,9 +94,11 @@ export function refine(
   }
 
   if (sampleRanges.length === 1) {
-    return refine(sampleRanges[0], getQuality, targetValueRange);
+    return refine(sampleRanges[0], getQuality, createObject, targetValueRange);
   }
 
-  const refinedResults = sampleRanges.map((sampleRange) => refine(sampleRange, getQuality, targetValueRange));
+  const refinedResults = sampleRanges.map((sampleRange) =>
+    refine(sampleRange, getQuality, createObject, targetValueRange)
+  );
   return maxByProperty(refinedResults, (r) => r.quality).item;
 }

@@ -7,10 +7,11 @@ import { DateDistance, DatePosition, Perigee, State } from "../state-types";
 import { createPerigeeOverlay, handlePerigeeMouseout, handlePerigeeMouseover } from "./perigee-info-overlay";
 import { D3ScaleTime } from "./d3-alias-types";
 import { Ephemeris } from "../ephemeris";
-import { getBestQualitySampleRanges, QualitySample, refine } from "../common/peak-detection";
+import { getPeaks } from "../common/peak-detection";
 import { getAngleFromFullMoon, getCosAngleFromFullMoon, getDistance, getEarthAndMoonPositions } from "../calculations";
 import { scaleVector } from "../common/vectors";
 import { getAstronomicalTime } from "../time";
+import { maxByProperty } from "../common/iteration";
 
 const lineColor = asCssColor([...moonlightColor, 1]);
 const moonCircleColor = asCssColor([...moonlightColor, 1]);
@@ -203,30 +204,10 @@ function getPerigeesAndFullMoonDates(
 ): { perigees: Perigee[]; fullMoonDates: Date[] } {
   const unixTimes = datePositions.map((p) => p.date.getTime());
 
-  const fullMoonDates = getClosestAngleDates(ephemeris, fullMoonCosAngle, unixTimes).map(
-    (d) => new Date(d.refinedUnixTime)
-  );
-  const perigeePositions = getPerigeePositions(ephemeris, dateDistances);
-  const perigeeUnixTimes = perigeePositions.map((p) => p.unixTime);
+  const fullMoonDates = getClosestAngleUnixTimes(ephemeris, fullMoonCosAngle, unixTimes).map((time) => new Date(time));
+  const newMoonDates = getClosestAngleUnixTimes(ephemeris, newMoonCosAngle, unixTimes).map((time) => new Date(time));
 
-  const superMoonUnixTimes = new Set(
-    getClosestAngleDates(ephemeris, fullMoonCosAngle, perigeeUnixTimes).map((d) => d.sourceUnixTime)
-  );
-
-  const superNewMoonUnixTimes = new Set(
-    getClosestAngleDates(ephemeris, newMoonCosAngle, perigeeUnixTimes).map((d) => d.sourceUnixTime)
-  );
-
-  const perigees = perigeePositions.map<Perigee>((p) => {
-    return {
-      date: new Date(p.unixTime),
-      distance: p.distance,
-      angleFromFullMoon: p.angleFromFullMoon,
-      angleFromFullMoonDegrees: radToDeg(p.angleFromFullMoon),
-      isSuperMoon: superMoonUnixTimes.has(p.unixTime),
-      isSuperNewMoon: superNewMoonUnixTimes.has(p.unixTime),
-    };
-  });
+  const perigees = getPerigees(ephemeris, dateDistances, fullMoonDates, newMoonDates);
 
   return { perigees, fullMoonDates };
 }
@@ -234,51 +215,73 @@ function getPerigeesAndFullMoonDates(
 // Aim to calculate troughs within 30 seconds of the minimum distance.
 const peakRangeThresholdSeconds = 1000 * 30;
 
-function getPerigeePositions(ephemeris: Ephemeris, dateDistances: DateDistance[]): UnixTimeDistanceAngle[] {
-  const qualitySamples: QualitySample[] = dateDistances.map((dd) => ({
-    value: dd.date.getTime(),
-    quality: -dd.distance,
-  }));
-
-  const troughRanges = getBestQualitySampleRanges(qualitySamples);
-  const troughs = troughRanges.map((range) =>
-    refine(
-      range,
-      (unixTime) => {
-        const positions = getEarthAndMoonPositions(ephemeris, getAstronomicalTime(new Date(unixTime)));
-        return -getDistance(positions);
-      },
-      peakRangeThresholdSeconds
-    )
+function getPerigees(
+  ephemeris: Ephemeris,
+  dateDistances: DateDistance[],
+  fullMoonDates: Date[],
+  newMoonDates: Date[]
+): Perigee[] {
+  const perigeePeaks = getPeaks(
+    dateDistances,
+    (dd) => dd.date.getTime(),
+    (dd) => -dd.distance,
+    (unixTime) => {
+      const date = new Date(unixTime);
+      const positions = getEarthAndMoonPositions(ephemeris, getAstronomicalTime(date));
+      const distance = getDistance(positions);
+      return { date, distance };
+    },
+    peakRangeThresholdSeconds
   );
 
-  return troughs.map<UnixTimeDistanceAngle>((t) => {
-    const positions = getEarthAndMoonPositions(ephemeris, getAstronomicalTime(new Date(t.value)));
+  const yearMaxMinDistance = new Map<number, { max: number; min: number }>();
+  Map.groupBy(dateDistances, (dd) => dd.date.getFullYear()).forEach((dds, year) => {
+    yearMaxMinDistance.set(year, {
+      max: maxByProperty(dds, (dd) => dd.distance).value,
+      min: -maxByProperty(dds, (dd) => -dd.distance).value,
+    });
+  });
+
+  return perigeePeaks.map<Perigee>((p) => {
+    const positions = getEarthAndMoonPositions(ephemeris, getAstronomicalTime(p.peak.date));
     const angleFromFullMoon = getAngleFromFullMoon(positions);
+
+    const maxMinDistance = yearMaxMinDistance.get(p.peak.date.getFullYear())!;
+    const superMoonThreshold = (maxMinDistance.max - maxMinDistance.min) * 0.1 + maxMinDistance.min;
+
+    const date = p.peak.date;
+    const unixTime = date.getTime();
+    const hoursFromFullMoon =
+      -maxByProperty(fullMoonDates, (fullMoonDate) => -Math.abs(fullMoonDate.getTime() - unixTime)).value /
+      (1000 * 60 * 60);
+    const hoursFromNewMoon =
+      -maxByProperty(newMoonDates, (newMoonDate) => -Math.abs(newMoonDate.getTime() - unixTime)).value /
+      (1000 * 60 * 60);
+
+    const isSuperMoon = hoursFromFullMoon < 24 && p.peak.distance < superMoonThreshold;
+    const isSuperNewMoon = hoursFromNewMoon < 24 && p.peak.distance < superMoonThreshold;
+
     return {
-      unixTime: t.value,
-      distance: -t.quality,
+      date,
+      distance: p.peak.distance,
       angleFromFullMoon,
+      angleFromFullMoonDegrees: radToDeg(angleFromFullMoon),
+      hoursFromFullMoon,
+      hoursFromNewMoon,
+      isSuperMoon,
+      isSuperNewMoon,
     };
   });
 }
 
-function getClosestAngleDates(
-  ephemeris: Ephemeris,
-  cosTargetAngle: number,
-  unixTimes: number[]
-): ClosestUnixTimeResult[] {
-  const qualitySamples: QualitySample[] = unixTimes.map((unixTime) => ({
-    value: unixTime,
-    quality: getProximityToAngle(unixTime),
-  }));
-
-  const peakRanges = getBestQualitySampleRanges(qualitySamples);
-  return peakRanges.map<ClosestUnixTimeResult>((range) => {
-    const sourceUnixTime = range.peak.value;
-    const refinedUnixTime = refine(range, getProximityToAngle, peakRangeThresholdSeconds).value;
-    return { sourceUnixTime, refinedUnixTime };
-  });
+function getClosestAngleUnixTimes(ephemeris: Ephemeris, cosTargetAngle: number, unixTimes: number[]): number[] {
+  return getPeaks(
+    unixTimes,
+    (t) => t,
+    (t) => getProximityToAngle(t),
+    (t) => t,
+    peakRangeThresholdSeconds
+  ).map((p) => p.peak);
 
   function getProximityToAngle(unixTime: number): number {
     const positions = getEarthAndMoonPositions(ephemeris, getAstronomicalTime(new Date(unixTime)));
@@ -286,14 +289,3 @@ function getClosestAngleDates(
     return -Math.abs(cosAngle - cosTargetAngle);
   }
 }
-
-type UnixTimeDistanceAngle = {
-  unixTime: number;
-  distance: number;
-  angleFromFullMoon: number;
-};
-
-type ClosestUnixTimeResult = {
-  sourceUnixTime: number;
-  refinedUnixTime: number;
-};

@@ -28,6 +28,8 @@ export type DateDistance = {
 export type Perigee = {
   date: Date;
   distance: number;
+  hoursFromFullMoon: number;
+  hoursFromNewMoon: number;
   angleFromFullMoon: number;
   angleFromFullMoonDegrees: number;
   isSuperMoon: boolean;
