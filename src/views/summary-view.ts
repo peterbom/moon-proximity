@@ -6,16 +6,18 @@ import { savePoints } from "../storage";
 import { hidden } from "../styles/site.module.css";
 import { certificateIcon, floppyDiskIcon, penIcon, trashIcon } from "./icons";
 
+const googleEarthPrefix = "https://earth.google.com/web/@";
+
 const tableRowContentHtml = `
-  <td data-var="lon"></td>
-  <td data-var="lat"></td>
-  <td data-var="elev"></td>
-  <td data-var="time"></td>
-  <td data-var="dist"></td>
-  <td data-var="earth">
+  <td data-label="Longitude" data-var="lon"></td>
+  <td data-label="Latitude" data-var="lat"></td>
+  <td data-label="Elevation" data-var="elev"></td>
+  <td data-label="Ideal Time" data-var="time"></td>
+  <td data-label="Distance" data-var="dist"></td>
+  <td data-label="Google Earth" data-var="earth">
     <a href="#" target="_blank" rel="noopener noreferrer">Open</a>
   </td>
-  <td data-var="action">
+  <td data-label="Action" data-var="action">
     <button data-action="verify" aria-label="Verify with Horizons" title="Verify with Horizons">
       ${certificateIcon}
       Verify
@@ -44,6 +46,7 @@ type TableRowElems = {
   editBtn: HTMLButtonElement;
   deleteBtn: HTMLButtonElement;
   saveBtn: HTMLButtonElement;
+  pasteHandler: ((e: ClipboardEvent) => void) | null;
   verifyHandler: (() => void) | null;
   editHandler: (() => void) | null;
   deleteHandler: (() => void) | null;
@@ -64,6 +67,7 @@ function getTableRowElems(tr: HTMLTableRowElement): TableRowElems {
     editBtn: actionElem.querySelector("button[data-action='edit']")!,
     deleteBtn: actionElem.querySelector("button[data-action='delete']")!,
     saveBtn: actionElem.querySelector("button[data-action='save']")!,
+    pasteHandler: null,
     verifyHandler: null,
     editHandler: null,
     deleteHandler: null,
@@ -119,6 +123,10 @@ function runWithData(state: State, resources: ViewResources) {
   refreshFromData();
 
   function refreshFromData() {
+    resources.rowDataItems.sort((a, b) =>
+      isEditingData(a) || isEditingData(b) ? 0 : a.distanceToMoonInKm - b.distanceToMoonInKm
+    );
+
     resources.elementsWithData = updateElementsFromData(
       resources.elementsWithData,
       resources.rowDataItems,
@@ -134,7 +142,7 @@ function runWithData(state: State, resources: ViewResources) {
     const rowElems = getTableRowElems(trElem);
 
     if (isEditingData(data)) {
-      setTableRowEditing(rowElems, data, handleValueChange, handleVerify, handleSave);
+      setTableRowEditing(rowElems, data, handleValueChange, handlePaste, handleVerify, handleSave);
     } else {
       setTableRowSaved(rowElems, data, handleDelete, handleEdit);
     }
@@ -144,6 +152,17 @@ function runWithData(state: State, resources: ViewResources) {
   function handleValueChange(data: EditingData, rowElems: TableRowElems) {
     data.horizonsResultRecord = null;
     updateRowVerificationState(rowElems, data);
+  }
+
+  function handlePaste(data: EditingData, rowElems: TableRowElems, urlComponents: EarthUrlComponents) {
+    data.horizonsResultRecord = null;
+    data.longitudeDegrees = urlComponents.lon;
+    data.latitudeDegrees = urlComponents.lat;
+    data.altitudeInM = urlComponents.alt;
+    rowElems.lon.querySelector("input")!.value = urlComponents.lon.toFixed(6);
+    rowElems.lat.querySelector("input")!.value = urlComponents.lat.toFixed(6);
+    rowElems.elev.querySelector("input")!.value = urlComponents.alt.toFixed(0);
+    handleVerify(data, rowElems);
   }
 
   async function handleVerify(data: EditingData, rowElems: TableRowElems) {
@@ -182,7 +201,7 @@ function runWithData(state: State, resources: ViewResources) {
     setTableRowSaved(rowElems, newPoint, handleDelete, handleEdit);
   }
 
-  function handleDelete(point: SavedPoint, rowElems: TableRowElems) {
+  function handleDelete(point: SavedPoint) {
     const index = resources.rowDataItems.indexOf(point);
     if (index === -1) {
       throw new Error("Point to delete not found");
@@ -194,6 +213,11 @@ function runWithData(state: State, resources: ViewResources) {
   }
 
   function handleEdit(point: SavedPoint, rowElems: TableRowElems) {
+    const index = resources.rowDataItems.indexOf(point);
+    if (index === -1) {
+      throw new Error("Point to edit not found");
+    }
+
     const editingData: EditingData = {
       longitudeDegrees: point.longitudeDegrees,
       latitudeDegrees: point.latitudeDegrees,
@@ -203,7 +227,9 @@ function runWithData(state: State, resources: ViewResources) {
       previouslySavedPoint: point,
     };
 
-    setTableRowEditing(rowElems, editingData, handleValueChange, handleVerify, handleSave);
+    resources.rowDataItems.splice(index, 1, editingData);
+
+    setTableRowEditing(rowElems, editingData, handleValueChange, handlePaste, handleVerify, handleSave);
   }
 
   function savePointsAndUpdate() {
@@ -227,6 +253,7 @@ function setTableRowEditing(
   rowElems: TableRowElems,
   data: EditingData,
   handleValueChange: (data: EditingData, rowElems: TableRowElems) => void,
+  handlePaste: (data: EditingData, rowElems: TableRowElems, urlComponents: EarthUrlComponents) => void,
   handleVerify: (data: EditingData, rowElems: TableRowElems) => void,
   handleSave: (data: EditingData, rowElems: TableRowElems) => void
 ) {
@@ -255,6 +282,10 @@ function setTableRowEditing(
     EarthViewMode.ExploreArea
   );
 
+  if (rowElems.pasteHandler !== null) {
+    rowElems.tr.removeEventListener("paste", rowElems.pasteHandler);
+  }
+
   if (rowElems.verifyHandler !== null) {
     rowElems.verifyBtn.removeEventListener("click", rowElems.verifyHandler);
   }
@@ -263,9 +294,11 @@ function setTableRowEditing(
     rowElems.saveBtn.removeEventListener("click", rowElems.saveHandler);
   }
 
+  rowElems.pasteHandler = createGoogleEarthPasteHandler(data, rowElems, handlePaste);
   rowElems.verifyHandler = () => handleVerify(data, rowElems);
   rowElems.saveHandler = () => handleSave(data, rowElems);
 
+  rowElems.tr.addEventListener("paste", rowElems.pasteHandler);
   rowElems.verifyBtn.addEventListener("click", rowElems.verifyHandler);
   rowElems.saveBtn.addEventListener("click", rowElems.saveHandler);
 
@@ -284,7 +317,7 @@ function setTableRowSaved(
   rowElems.lat.textContent = `${point.latitudeDegrees.toFixed(6)}°`;
   rowElems.elev.textContent = `${Math.round(point.altitudeInM).toLocaleString()} m`;
   rowElems.time.textContent = toFriendlyUTC(new Date(point.idealUnixTime));
-  rowElems.dist.textContent = `${(Math.round(point.distanceToMoonInKm * 1000) / 1000).toLocaleString()}`;
+  rowElems.dist.textContent = `${(Math.round(point.distanceToMoonInKm * 1000) / 1000).toLocaleString()} km`;
   rowElems.earthLink.href = getGoogleEarthLink(
     point.longitudeDegrees,
     point.latitudeDegrees,
@@ -335,10 +368,6 @@ function getGoogleEarthLink(
   altitudeInM: number,
   mode: EarthViewMode
 ): string {
-  const lat = latitudeDegrees.toFixed(6);
-  const lon = longitudeDegrees.toFixed(6);
-  const alt = altitudeInM.toFixed();
-
   let camDist: number;
   let tilt: number;
   switch (mode) {
@@ -351,8 +380,57 @@ function getGoogleEarthLink(
       tilt = 0;
   }
 
-  return `https://earth.google.com/web/@${lat},${lon},${alt}a,${camDist}d,${tilt}t`;
+  return createGoogleEarthUrl({ lat: latitudeDegrees, lon: longitudeDegrees, alt: altitudeInM, camDist, tilt });
 }
+
+function createGoogleEarthUrl(components: EarthUrlComponents): string {
+  const { lat, lon, alt, camDist, tilt } = components;
+  return `${googleEarthPrefix}${lat.toFixed(6)},${lon.toFixed(6)},${alt.toFixed()}a,${camDist}d,${tilt}t`;
+}
+
+function parseGoogleEarthUrl(url: string): EarthUrlComponents | null {
+  if (!url.startsWith(googleEarthPrefix)) {
+    return null;
+  }
+
+  url = url.slice(googleEarthPrefix.length);
+  const slashIndex = url.indexOf("/");
+  if (slashIndex >= 0) {
+    url = url.slice(0, slashIndex);
+  }
+
+  const parts = url.split(",");
+  const lat = parseFloat(parts.shift() || "");
+  const lon = parseFloat(parts.shift() || "");
+  const alt = getPart("a");
+  const camDist = getPart("d");
+  const tilt = getPart("t");
+
+  function getPart(suffix: string): number {
+    for (const part of parts) {
+      const index = part.indexOf(suffix);
+      if (index > 0) {
+        return parseFloat(part.slice(0, index));
+      }
+    }
+
+    return NaN;
+  }
+
+  if (Number.isNaN(lat) || Number.isNaN(lon) || Number.isNaN(alt)) {
+    return null;
+  }
+
+  return { lat, lon, alt, camDist, tilt };
+}
+
+type EarthUrlComponents = {
+  lat: number;
+  lon: number;
+  alt: number;
+  camDist: number;
+  tilt: number;
+};
 
 async function getVerifiedMinimumRange(data: EditingData): Promise<HorizonsResultRecord | null> {
   const minutesEachSide = 15;
@@ -384,4 +462,24 @@ type EditingData = Pick<TerrainLocationData, "optimalDate" | "longitudeDegrees" 
 
 function isEditingData(data: RowData): data is EditingData {
   return (data as EditingData).horizonsResultRecord !== undefined;
+}
+
+function createGoogleEarthPasteHandler(
+  data: EditingData,
+  rowElems: TableRowElems,
+  handler: (data: EditingData, rowElems: TableRowElems, urlComponents: EarthUrlComponents) => void
+): (e: ClipboardEvent) => void {
+  return handlePaste;
+
+  function handlePaste(e: ClipboardEvent) {
+    const text = e.clipboardData?.getData("text") || "";
+    if (text.length === 0) {
+      return;
+    }
+
+    const urlComponents = parseGoogleEarthUrl(text);
+    if (urlComponents !== null) {
+      handler(data, rowElems, urlComponents);
+    }
+  }
 }
