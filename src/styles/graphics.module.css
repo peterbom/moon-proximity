@@ -1,3 +1,9 @@
+.graphicLine {
+  display: block;
+  width: 100%;
+  height: 4rem;
+}
+
 .graphicRect {
   display: block;
   width: 100%;

@@ -1,46 +1,98 @@
-import { axisBottom, axisLeft, create, D3ZoomEvent, extent, scaleLinear, zoom } from "d3";
-import { asCssColor } from "../common/html-utils";
-import { highlightColor, moonlightColor } from "../constants";
+import {
+  axisBottom,
+  axisLeft,
+  create,
+  D3ZoomEvent,
+  extent,
+  scaleLinear,
+  Selection as D3Selection,
+  zoom,
+  ZoomBehavior,
+} from "d3";
+import { OverlayElement } from "../common/html-utils";
 import type { Perigee, State } from "../state-types";
-import { createPerigeeOverlay, handlePerigeeMouseout, handlePerigeeMouseover } from "./perigee-info-overlay";
-import { scaleVector } from "../common/vectors";
-import type { D3ScaleLinear } from "./d3-alias-types";
+import {
+  createPerigeeOverlay,
+  handlePerigeeMouseout,
+  handlePerigeeMouseover,
+  PerigeeElems,
+  setPointsAppearance,
+} from "./perigee-info-overlay";
+import type { D3DatalessSelection, D3ScaleLinear } from "./d3-alias-types";
 
-const pointColor = asCssColor([...highlightColor, 1]);
-const moonCircleColor = asCssColor([...moonlightColor, 1]);
+export function run(container: HTMLElement, state: State) {
+  const viewDimensions: ViewDimensions = {
+    width: container.clientWidth,
+    height: container.clientHeight,
+    marginTop: 10,
+    marginRight: 16,
+    marginBottom: 30,
+    marginLeft: 50,
+  };
 
-const deselectedMoonCircleColor = asCssColor([...scaleVector(moonlightColor, 0.4), 1]);
-const deselectedPointColor = asCssColor([...scaleVector(highlightColor, 0.4), 1]);
+  const viewComponents = createViewComponents(container, viewDimensions);
+  container.append(viewComponents.svg.node()!);
 
-export async function run(container: HTMLElement, state: State) {
-  const perigees = await state.perigees.getValue();
+  state.selectedPerigee.subscribe((p) => updateSelectedPerigee(p, viewComponents));
+  state.perigees.subscribe((perigees) => updatePerigees(state, viewComponents, perigees));
 
-  const tooltipOverlay = createPerigeeOverlay(container);
+  updatePerigees(state, viewComponents, state.perigees.getValue());
+  updateSelectedPerigee(state.selectedPerigee.getValue(), viewComponents);
+}
 
-  let selectedPerigee = state.selectedPerigee.getValue();
-  state.selectedPerigee.subscribe(selectedPerigeeChanged);
+function updateSelectedPerigee(perigee: Perigee | null, viewComponents: ViewComponents) {
+  viewComponents.selectedPerigee = perigee;
+  viewComponents.points = viewComponents.points.call(setPointsAppearance, perigee);
+}
 
-  // Declare the chart dimensions and margins.
-  const width = container.clientWidth;
-  const height = container.clientHeight;
-  const marginTop = 10;
-  const marginRight = 16;
-  const marginBottom = 30;
-  const marginLeft = 50;
+function updatePerigees(state: State, viewComponents: ViewComponents, perigees: Perigee[]) {
+  const viewDimensions = viewComponents.viewDimensions;
+
+  viewComponents.xScale = viewComponents.xScale
+    .domain(extent(perigees, (d) => d.angleFromFullMoonDegrees) as [number, number]) // cast needed: https://stackoverflow.com/a/75465468
+    .nice();
+
+  viewComponents.yScale = viewComponents.yScale.domain(extent(perigees, (d) => d.distance) as [number, number]).nice();
+
+  viewComponents.points = viewComponents.points
+    .data(perigees)
+    .join("circle")
+    .call(setPointsAppearance, viewComponents.selectedPerigee)
+    .attr("cx", (p) => viewComponents.xScale(p.angleFromFullMoonDegrees))
+    .attr("cy", (p) => viewComponents.yScale(p.distance))
+    .style("cursor", "pointer")
+    .on("mouseover", (_e, p) =>
+      handlePerigeeMouseover(
+        viewComponents.tooltipOverlay,
+        p,
+        viewComponents.xScale(p.angleFromFullMoonDegrees),
+        viewComponents.yScale(p.distance)
+      )
+    )
+    .on("mouseout", () => handlePerigeeMouseout(viewComponents.tooltipOverlay))
+    .on("pointerdown", (_e, p) => state.selectedPerigee.setValue(p));
+
+  rescaleXAxis(viewComponents, viewComponents.xScale, viewDimensions.width);
+  viewComponents.yAxis = viewComponents.yAxis.call(axisLeft(viewComponents.yScale));
+
+  viewComponents.zoomBehavior = viewComponents.zoomBehavior.on("zoom", (event: D3ZoomEvent<SVGElement, undefined>) => {
+    const xZoomed = event.transform.rescaleX(viewComponents.xScale);
+    viewComponents.points = viewComponents.points.attr("cx", (d) => xZoomed(d.angleFromFullMoonDegrees));
+    rescaleXAxis(viewComponents, xZoomed, viewDimensions.width);
+  });
+
+  // Initial zoom.
+  viewComponents.svg.call(viewComponents.zoomBehavior).call(viewComponents.zoomBehavior.scaleTo, 8, [0, 0]);
+}
+
+function createViewComponents(container: HTMLElement, viewDimensions: ViewDimensions): ViewComponents {
+  const { width, height, marginLeft, marginRight, marginTop, marginBottom } = viewDimensions;
 
   // Declare the x (angle) scale.
-  const xScale = scaleLinear()
-    .domain(extent(perigees, (d) => d.angleFromFullMoonDegrees) as [number, number]) // cast needed: https://stackoverflow.com/a/75465468
-    .range([marginLeft, width - marginRight])
-    .nice();
-
-  let xZoomed = xScale;
+  const xScale = scaleLinear().range([marginLeft, width - marginRight]);
 
   // Declare the y (distance) scale.
-  const yScale = scaleLinear()
-    .domain(extent(perigees, (d) => d.distance) as [number, number])
-    .range([height - marginBottom, marginTop])
-    .nice();
+  const yScale = scaleLinear().range([height - marginBottom, marginTop]);
 
   // Create the zoom behavior.
   const zoomBehavior = zoom<SVGSVGElement, undefined>()
@@ -52,8 +104,7 @@ export async function run(container: HTMLElement, state: State) {
     .translateExtent([
       [marginLeft, -Infinity],
       [width - marginRight, Infinity],
-    ])
-    .on("zoom", zoomed);
+    ]);
 
   // Create the SVG container.
   const svg = create("svg")
@@ -73,79 +124,57 @@ export async function run(container: HTMLElement, state: State) {
     .attr("width", width - marginLeft - marginRight)
     .attr("height", height - marginTop - marginBottom);
 
-  const points = svg
+  const points: D3Selection<SVGCircleElement, Perigee, SVGGElement, undefined> = svg
     .append("g")
     .attr("clip-path", `url(#${clipId})`)
-    .selectAll("circle")
-    .data(perigees)
-    .enter()
-    .append("circle")
-    .attr("cx", (p) => xScale(p.angleFromFullMoonDegrees))
-    .attr("cy", (p) => yScale(p.distance))
-    .attr("r", getRadius)
-    .attr("stroke", getCircleOutlineColor)
-    .attr("stroke-width", (p) => (p.isSuperMoon || p.isSuperNewMoon ? 2 : 0))
-    .attr("fill", getCircleColor)
-    .style("cursor", "pointer")
-    .on("mouseover", (_e, p) =>
-      handlePerigeeMouseover(tooltipOverlay, p, xZoomed(p.angleFromFullMoonDegrees), yScale(p.distance))
-    )
-    .on("mouseout", () => handlePerigeeMouseout(tooltipOverlay))
-    .on("pointerdown", (_e, p) => state.selectedPerigee.setValue(p));
+    .selectAll("circle");
 
-  // Add the x-axis.
   const xAxis = svg.append("g").attr("transform", `translate(0,${height - marginBottom})`);
+  const yAxis = svg.append("g").attr("transform", `translate(${marginLeft},0)`);
 
-  // Create the horizontal axis scaler, called at startup and when zooming.
-  const scaleXAxis = (x: D3ScaleLinear) =>
-    xAxis.call(
-      axisBottom(x)
-        .ticks(width / 80)
-        .tickSizeOuter(0)
-    );
+  const tooltipOverlay = createPerigeeOverlay(container);
+  const selectedPerigee = null;
 
-  scaleXAxis(xScale);
-
-  // Add the y-axis.
-  svg.append("g").attr("transform", `translate(${marginLeft},0)`).call(axisLeft(yScale));
-
-  // Initial zoom.
-  svg.call(zoomBehavior).call(zoomBehavior.scaleTo, 8, [0, 0]);
-
-  // Append the SVG element.
-  container.append(svg.node()!);
-
-  // When zooming, redraw the area and the x axis.
-  function zoomed(event: D3ZoomEvent<SVGElement, undefined>) {
-    xZoomed = event.transform.rescaleX(xScale);
-    points.attr("cx", (d) => xZoomed(d.angleFromFullMoonDegrees));
-    scaleXAxis(xZoomed);
-  }
-
-  function selectedPerigeeChanged(perigee: Perigee | null) {
-    selectedPerigee = perigee;
-    // Move selected perigee to the end so that it appears on top of others.
-    points.sort((a, b) => (a === selectedPerigee ? 1 : b === selectedPerigee ? -1 : 0));
-    points.attr("stroke", getCircleOutlineColor).attr("fill", getCircleColor).attr("r", getRadius);
-  }
-
-  function getRadius(perigee: Perigee): number {
-    return perigee === selectedPerigee ? 9 : 6;
-  }
-
-  function getCircleOutlineColor(perigee: Perigee): string {
-    if (selectedPerigee === null || selectedPerigee === perigee) {
-      return moonCircleColor;
-    }
-
-    return deselectedMoonCircleColor;
-  }
-
-  function getCircleColor(perigee: Perigee): string {
-    if (selectedPerigee === null || selectedPerigee === perigee) {
-      return perigee.isSuperMoon ? moonCircleColor : perigee.isSuperNewMoon ? "#000" : pointColor;
-    }
-
-    return perigee.isSuperMoon ? deselectedMoonCircleColor : perigee.isSuperNewMoon ? "#000" : deselectedPointColor;
-  }
+  return {
+    viewDimensions,
+    svg,
+    xScale,
+    yScale,
+    xAxis,
+    yAxis,
+    points,
+    zoomBehavior,
+    tooltipOverlay,
+    selectedPerigee,
+  };
 }
+
+function rescaleXAxis(viewComponents: ViewComponents, xScale: D3ScaleLinear, width: number) {
+  viewComponents.xAxis = viewComponents.xAxis.call(
+    axisBottom(xScale)
+      .ticks(width / 80)
+      .tickSizeOuter(0)
+  );
+}
+
+type ViewDimensions = {
+  width: number;
+  height: number;
+  marginTop: number;
+  marginRight: number;
+  marginBottom: number;
+  marginLeft: number;
+};
+
+type ViewComponents = {
+  viewDimensions: ViewDimensions;
+  svg: D3DatalessSelection<SVGSVGElement>;
+  xScale: D3ScaleLinear;
+  yScale: D3ScaleLinear;
+  xAxis: D3DatalessSelection<SVGGElement>;
+  yAxis: D3DatalessSelection<SVGGElement>;
+  points: D3Selection<SVGCircleElement, Perigee, SVGGElement, undefined>;
+  zoomBehavior: ZoomBehavior<SVGSVGElement, undefined>;
+  tooltipOverlay: OverlayElement<PerigeeElems>;
+  selectedPerigee: Perigee | null;
+};

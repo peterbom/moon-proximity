@@ -1,8 +1,9 @@
 import { createCombinedCanvas, createDivInRelativeContainer, getElementByIdOrError } from "./common/html-utils";
 import { Ephemeris, SeriesMetadata, SeriesType } from "./ephemeris";
-import type { DateDistance, DatePosition, Perigee, State } from "./state-types";
+import type { DateDistance, DatePosition, State } from "./state-types";
 import { getWebGLContext, MultiViewContext } from "./webgl/context";
 import { MultiSceneDrawer } from "./webgl/multi-scene-drawer";
+import { run as runTimeRangeView } from "./views/time-range-view";
 import { run as runDistanceTimeView } from "./views/distance-time-view";
 import { run as runPerigeeTimeView } from "./views/perigee-time-view";
 import { run as runPerigeeAngleView } from "./views/perigee-angle-view";
@@ -10,7 +11,7 @@ import { run as runEarthView } from "./views/earth-view";
 import { run as runProximityMapView } from "./views/proximity-map-view";
 import { run as runSummaryView } from "./views/summary-view";
 import { DelayedProperty, NotifiableProperty } from "./common/state-properties";
-import { graphicRect, graphicSquare } from "./styles/graphics.module.css";
+import { graphicLine, graphicRect, graphicSquare } from "./styles/graphics.module.css";
 import { hidden } from "./styles/site.module.css";
 import { getSavedPoints, getSavedTldr, saveTldr } from "./storage";
 
@@ -38,6 +39,7 @@ document.addEventListener("DOMContentLoaded", function () {
   showHideElements(elementsByView);
 
   const newElemViewLookup: ElementFunctionLookup = {
+    "time-range-view": { run: runTimeRangeView, classList: [graphicLine] },
     "distance-time-view": { run: runDistanceTimeView, classList: [graphicRect] },
     "perigee-time-view": { run: runPerigeeTimeView, classList: [graphicRect] },
     "perigee-angle-view": { run: runPerigeeAngleView, classList: [graphicRect] },
@@ -82,12 +84,20 @@ async function getEphemeris(): Promise<Ephemeris> {
   return new Ephemeris(new DataView(buffer), ephemerisMetadata, ephemerisStartDate);
 }
 
+const nowDate = new Date();
+const initialStartDate = new Date(Date.UTC(nowDate.getUTCFullYear(), nowDate.getUTCMonth(), nowDate.getUTCDate()));
+const initialEndDate = new Date(Date.UTC(nowDate.getUTCFullYear() + 5, nowDate.getUTCMonth(), nowDate.getUTCDate()));
+
 const state: State = {
   tldrView: new NotifiableProperty<boolean>(false),
   ephPromise: getEphemeris(),
+  timeRange: new NotifiableProperty({
+    startDate: initialStartDate,
+    endDate: initialEndDate,
+  }),
   datePositions: new DelayedProperty<DatePosition[]>(),
   dateDistances: new DelayedProperty<DateDistance[]>(),
-  perigees: new DelayedProperty<Perigee[]>(),
+  perigees: new NotifiableProperty([]),
   selectedPerigee: new NotifiableProperty(null),
   proximityShapeData: new NotifiableProperty(null),
   terrainLocationData: new NotifiableProperty(null),

@@ -1,7 +1,10 @@
-import { createTextOverlay, OverlayElement, setAbsoluteStyleRect } from "../common/html-utils";
+import { asCssColor, createTextOverlay, OverlayElement, setAbsoluteStyleRect } from "../common/html-utils";
 import { toFriendlyUTC } from "../common/text-utils";
+import { scaleVector } from "../common/vectors";
+import { highlightColor, moonlightColor } from "../constants";
 import type { Perigee } from "../state-types";
 import { overlay } from "../styles/site.module.css";
+import { Selection as D3Selection } from "d3";
 
 const perigeeDisplayHtml = `
 <div>date: <span data-var="date"></span></div>
@@ -10,7 +13,7 @@ const perigeeDisplayHtml = `
 <div><span data-var="angle-info"></span></div>
 `;
 
-type PerigeeElems = {
+export type PerigeeElems = {
   date: Element;
   distance: Element;
   angle: Element;
@@ -55,4 +58,41 @@ export function handlePerigeeMouseover(
   overlayElement.content.distance.textContent = perigee.distance.toFixed(2);
   overlayElement.content.angle.textContent = perigee.angleFromFullMoonDegrees.toFixed(1);
   overlayElement.content.angleInfo.textContent = angleExtraInfo;
+}
+
+const moonCircleColor = asCssColor([...moonlightColor, 1]);
+const pointColor = asCssColor([...highlightColor, 1]);
+
+const deselectedMoonCircleColor = asCssColor([...scaleVector(moonlightColor, 0.4), 1]);
+const deselectedPointColor = asCssColor([...scaleVector(highlightColor, 0.4), 1]);
+
+export function setPointsAppearance(
+  points: D3Selection<SVGCircleElement, Perigee, SVGGElement, undefined>,
+  selectedPerigee: Perigee | null
+): D3Selection<SVGCircleElement, Perigee, SVGGElement, undefined> {
+  return points
+    .attr("stroke", getCircleOutlineColor)
+    .attr("stroke-width", (p) => (p.isSuperMoon || p.isSuperNewMoon ? 2 : 0))
+    .attr("fill", getCircleColor)
+    .attr("r", getRadius);
+
+  function getRadius(perigee: Perigee): number {
+    return perigee === selectedPerigee ? 9 : 6;
+  }
+
+  function getCircleOutlineColor(perigee: Perigee): string {
+    if (selectedPerigee === null || selectedPerigee === perigee) {
+      return moonCircleColor;
+    }
+
+    return deselectedMoonCircleColor;
+  }
+
+  function getCircleColor(perigee: Perigee): string {
+    if (selectedPerigee === null || selectedPerigee === perigee) {
+      return perigee.isSuperMoon ? moonCircleColor : perigee.isSuperNewMoon ? "#000" : pointColor;
+    }
+
+    return perigee.isSuperMoon ? deselectedMoonCircleColor : perigee.isSuperNewMoon ? "#000" : deselectedPointColor;
+  }
 }

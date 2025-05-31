@@ -1,25 +1,24 @@
 import { axisBottom, axisLeft, create, curveNatural, extent, line, scaleLinear, scaleUtc, zoom } from "d3";
-import type { D3ZoomEvent } from "d3";
-import { asCssColor } from "../common/html-utils";
+import type { D3ZoomEvent, Selection as D3Selection, ZoomBehavior } from "d3";
+import { asCssColor, OverlayElement } from "../common/html-utils";
 import { radToDeg } from "../common/math";
-import { displayEndDate, displayStartDate, highlightColor, moonlightColor } from "../constants";
+import { moonlightColor } from "../constants";
 import { DateDistance, DatePosition, Perigee, State } from "../state-types";
-import { createPerigeeOverlay, handlePerigeeMouseout, handlePerigeeMouseover } from "./perigee-info-overlay";
-import { D3ScaleTime } from "./d3-alias-types";
+import {
+  createPerigeeOverlay,
+  handlePerigeeMouseout,
+  handlePerigeeMouseover,
+  PerigeeElems,
+  setPointsAppearance,
+} from "./perigee-info-overlay";
+import { D3DatalessSelection, D3ScaleLinear, D3ScaleTime } from "./d3-alias-types";
 import { Ephemeris } from "../ephemeris";
 import { getPeaks } from "../common/peak-detection";
 import { getAngleFromFullMoon, getCosAngleFromFullMoon, getDistance, getEarthAndMoonPositions } from "../calculations";
-import { scaleVector } from "../common/vectors";
 import { getAstronomicalTime } from "../time";
 import { maxByProperty } from "../common/iteration";
 
 const lineColor = asCssColor([...moonlightColor, 1]);
-const moonCircleColor = asCssColor([...moonlightColor, 1]);
-const pointColor = asCssColor([...highlightColor, 1]);
-
-const deselectedMoonCircleColor = asCssColor([...scaleVector(moonlightColor, 0.4), 1]);
-const deselectedPointColor = asCssColor([...scaleVector(highlightColor, 0.4), 1]);
-
 const fullMoonCosAngle = 1;
 const newMoonCosAngle = -1;
 
@@ -28,47 +27,126 @@ export async function run(container: HTMLElement, state: State) {
   const datePositions = await state.datePositions.getValue();
   const dateDistances = await state.dateDistances.getValue();
 
-  const { perigees, fullMoonDates } = getPerigeesAndFullMoonDates(ephemeris, datePositions, dateDistances);
+  const { startDate, endDate } = state.timeRange.getValue();
 
+  const viewDimensions: ViewDimensions = {
+    width: container.clientWidth,
+    height: container.clientHeight,
+    marginTop: 10,
+    marginRight: 16,
+    marginBottom: 30,
+    marginLeft: 50,
+  };
+
+  const viewComponents = createViewComponents(container, viewDimensions);
+  container.append(viewComponents.svg.node()!);
+
+  const selectedPerigee = state.selectedPerigee.getValue();
+  state.selectedPerigee.subscribe((p) => updateSelectedPerigee(p, viewComponents));
+
+  state.timeRange.subscribe(({ startDate, endDate }) =>
+    updateDates(state, ephemeris, viewComponents, startDate, endDate, datePositions, dateDistances)
+  );
+
+  updateDates(state, ephemeris, viewComponents, startDate, endDate, datePositions, dateDistances);
+  updateSelectedPerigee(selectedPerigee, viewComponents);
+}
+
+function updateSelectedPerigee(perigee: Perigee | null, viewComponents: ViewComponents) {
+  viewComponents.selectedPerigee = perigee;
+  viewComponents.points = viewComponents.points.call(setPointsAppearance, perigee);
+}
+
+function updateDates(
+  state: State,
+  ephemeris: Ephemeris,
+  viewComponents: ViewComponents,
+  startDate: Date,
+  endDate: Date,
+  allDatePositions: DatePosition[],
+  allDateDistances: DateDistance[]
+) {
+  const datePositions = allDatePositions.filter((dd) => dd.date >= startDate && dd.date < endDate);
+  const dateDistances = allDateDistances.filter((dd) => dd.date >= startDate && dd.date < endDate);
+
+  const { perigees, fullMoonDates } = getPerigeesAndFullMoonDates(ephemeris, datePositions, dateDistances);
   state.perigees.setValue(perigees);
 
-  const tooltipOverlay = createPerigeeOverlay(container);
+  const viewDimensions = viewComponents.viewDimensions;
 
-  let selectedPerigee = state.selectedPerigee.getValue();
-  state.selectedPerigee.subscribe(selectedPerigeeChanged);
+  viewComponents.xScale = viewComponents.xScale.domain([startDate, endDate]);
 
-  // Declare the chart dimensions and margins.
-  const width = container.clientWidth;
-  const height = container.clientHeight;
-  const marginTop = 10;
-  const marginRight = 16;
-  const marginBottom = 30;
-  const marginLeft = 50;
+  viewComponents.yScale = viewComponents.yScale
+    .domain(extent(perigees, (d) => d.distance) as [number, number]) // cast needed: https://stackoverflow.com/a/75465468
+    .nice();
+
+  // Append a path for the line.
+  viewComponents.path = viewComponents.path.attr("d", makeLine(viewComponents.xScale, viewComponents.yScale, perigees));
+
+  viewComponents.points = viewComponents.points
+    .data(perigees)
+    .join("circle")
+    .call(setPointsAppearance, viewComponents.selectedPerigee)
+    .attr("cx", (p) => viewComponents.xScale(p.date))
+    .attr("cy", (p) => viewComponents.yScale(p.distance))
+    .style("cursor", "pointer")
+    .on("mouseover", (_e, p) =>
+      handlePerigeeMouseover(
+        viewComponents.tooltipOverlay,
+        p,
+        viewComponents.xScale(p.date),
+        viewComponents.yScale(p.distance)
+      )
+    )
+    .on("mouseout", () => handlePerigeeMouseout(viewComponents.tooltipOverlay))
+    .on("pointerdown", (_e, p) => state.selectedPerigee.setValue(p));
+
+  viewComponents.fullMoonLines = viewComponents.fullMoonLines
+    .data(fullMoonDates)
+    .join("line")
+    .attr("x1", viewComponents.xScale)
+    .attr("y1", 0)
+    .attr("x2", viewComponents.xScale)
+    .attr("y2", viewDimensions.height - viewDimensions.marginTop - viewDimensions.marginBottom)
+    .style("stroke-width", 1)
+    .style("stroke", lineColor)
+    .style("fill", "none");
+
+  rescaleXAxis(viewComponents, viewComponents.xScale, viewDimensions.width);
+  viewComponents.yAxis = viewComponents.yAxis.call(axisLeft(viewComponents.yScale));
+
+  const intervalYears = (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 365);
+  const initialScaleFactor = Math.max(intervalYears / 2, 1);
+  const maxScaleFactor = Math.max(intervalYears * 2, 1);
+
+  viewComponents.zoomBehavior
+    .scaleExtent([1, maxScaleFactor])
+    .on("zoom", (event: D3ZoomEvent<SVGElement, undefined>) => {
+      // When zooming, redraw the area and the x axis.
+      const xZoomed = event.transform.rescaleX(viewComponents.xScale);
+      viewComponents.path = viewComponents.path.attr("d", makeLine(xZoomed, viewComponents.yScale, perigees));
+      viewComponents.points = viewComponents.points.attr("cx", (d) => xZoomed(d.date));
+      viewComponents.fullMoonLines = viewComponents.fullMoonLines.attr("x1", xZoomed).attr("x2", xZoomed);
+      rescaleXAxis(viewComponents, xZoomed, viewDimensions.width);
+    });
+
+  // Initial zoom.
+  viewComponents.svg
+    .call(viewComponents.zoomBehavior)
+    .call(viewComponents.zoomBehavior.scaleTo, initialScaleFactor, [viewComponents.xScale(startDate), 0]);
+}
+
+function createViewComponents(container: HTMLElement, viewDimensions: ViewDimensions): ViewComponents {
+  const { width, height, marginLeft, marginRight, marginTop, marginBottom } = viewDimensions;
 
   // Declare the x (time) scale.
-  const xScale = scaleUtc()
-    .domain([displayStartDate, displayEndDate])
-    .range([marginLeft, width - marginRight])
-    .nice();
-
-  let xZoomed = xScale;
+  const xScale = scaleUtc().range([marginLeft, width - marginRight]);
 
   // Declare the y (distance) scale.
-  const yScale = scaleLinear()
-    .domain(extent(perigees, (d) => d.distance) as [number, number]) // cast needed: https://stackoverflow.com/a/75465468
-    .range([height - marginBottom, marginTop])
-    .nice();
-
-  // Given a time scaling function, constructs a 'd' attribute value (string representation of the line).
-  const makeLine = (xScalingFunction: D3ScaleTime) =>
-    line<Perigee>()
-      .x((d) => xScalingFunction(d.date))
-      .y((d) => yScale(d.distance))
-      .curve(curveNatural)(perigees);
+  const yScale = scaleLinear().range([height - marginBottom, marginTop]);
 
   // Create the zoom behavior.
   const zoomBehavior = zoom<SVGSVGElement, undefined>()
-    .scaleExtent([1, 32])
     .extent([
       [marginLeft, marginTop],
       [width - marginRight, height - marginBottom],
@@ -76,8 +154,7 @@ export async function run(container: HTMLElement, state: State) {
     .translateExtent([
       [marginLeft, -Infinity],
       [width - marginRight, Infinity],
-    ])
-    .on("zoom", zoomed);
+    ]);
 
   // Create the SVG container.
   const svg = create("svg")
@@ -104,97 +181,54 @@ export async function run(container: HTMLElement, state: State) {
     .attr("fill", "none")
     .attr("stroke", lineColor)
     .attr("stroke-width", 0.5)
-    .style("stroke-dasharray", "5,5")
-    .attr("d", makeLine(xScale));
+    .style("stroke-dasharray", "5,5");
 
-  const points = svg
+  const points: D3Selection<SVGCircleElement, Perigee, SVGGElement, undefined> = svg
     .append("g")
     .attr("clip-path", `url(#${clipId})`)
-    .selectAll("circle")
-    .data(perigees)
-    .enter()
-    .append("circle")
-    .attr("cx", (p) => xScale(p.date))
-    .attr("cy", (p) => yScale(p.distance))
-    .attr("r", getRadius)
-    .attr("stroke", getCircleOutlineColor)
-    .attr("stroke-width", (p) => (p.isSuperMoon || p.isSuperNewMoon ? 2 : 0))
-    .attr("fill", getCircleColor)
-    .style("cursor", "pointer")
-    .on("mouseover", (_e, p) => handlePerigeeMouseover(tooltipOverlay, p, xZoomed(p.date), yScale(p.distance)))
-    .on("mouseout", () => handlePerigeeMouseout(tooltipOverlay))
-    .on("pointerdown", (_e, p) => state.selectedPerigee.setValue(p));
+    .selectAll("circle");
 
-  const fullMoonLines = svg
+  const fullMoonLines: D3Selection<SVGLineElement, Date, SVGGElement, undefined> = svg
     .append("g")
     .attr("clip-path", `url(#${clipId})`)
-    .selectAll("line")
-    .data(fullMoonDates)
-    .enter()
-    .append("line")
-    .attr("x1", xScale)
-    .attr("y1", 0)
-    .attr("x2", xScale)
-    .attr("y2", height - marginTop - marginBottom)
-    .style("stroke-width", 1)
-    .style("stroke", lineColor)
-    .style("fill", "none");
+    .selectAll("line");
 
-  // Add the x-axis.
   const xAxis = svg.append("g").attr("transform", `translate(0,${height - marginBottom})`);
+  const yAxis = svg.append("g").attr("transform", `translate(${marginLeft},0)`);
 
-  // Create the horizontal axis scaler, called at startup and when zooming.
-  const scaleXAxis = (x: D3ScaleTime) =>
-    xAxis.call(
-      axisBottom(x)
-        .ticks(width / 80)
-        .tickSizeOuter(0)
-    );
+  const tooltipOverlay = createPerigeeOverlay(container);
+  const selectedPerigee = null;
 
-  scaleXAxis(xScale);
+  return {
+    viewDimensions,
+    svg,
+    xScale,
+    yScale,
+    xAxis,
+    yAxis,
+    path,
+    points,
+    fullMoonLines,
+    zoomBehavior,
+    tooltipOverlay,
+    selectedPerigee,
+  };
+}
 
-  // Add the y-axis.
-  svg.append("g").attr("transform", `translate(${marginLeft},0)`).call(axisLeft(yScale));
+function rescaleXAxis(viewComponents: ViewComponents, xScale: D3ScaleTime, width: number) {
+  viewComponents.xAxis = viewComponents.xAxis.call(
+    axisBottom(xScale)
+      .ticks(width / 80)
+      .tickSizeOuter(0)
+  );
+}
 
-  // Initial zoom.
-  svg.call(zoomBehavior).call(zoomBehavior.scaleTo, 8, [xScale(displayStartDate), 0]);
-
-  // Append the SVG element.
-  container.append(svg.node()!);
-
-  // When zooming, redraw the area and the x axis.
-  function zoomed(event: D3ZoomEvent<SVGElement, undefined>) {
-    xZoomed = event.transform.rescaleX(xScale);
-    path.attr("d", makeLine(xZoomed));
-    points.attr("cx", (d) => xZoomed(d.date));
-    fullMoonLines.attr("x1", xZoomed).attr("x2", xZoomed);
-    scaleXAxis(xZoomed);
-  }
-
-  function selectedPerigeeChanged(perigee: Perigee | null) {
-    selectedPerigee = perigee;
-    points.attr("stroke", getCircleOutlineColor).attr("fill", getCircleColor).attr("r", getRadius);
-  }
-
-  function getRadius(perigee: Perigee): number {
-    return perigee === selectedPerigee ? 9 : 6;
-  }
-
-  function getCircleOutlineColor(perigee: Perigee): string {
-    if (selectedPerigee === null || selectedPerigee === perigee) {
-      return moonCircleColor;
-    }
-
-    return deselectedMoonCircleColor;
-  }
-
-  function getCircleColor(perigee: Perigee): string {
-    if (selectedPerigee === null || selectedPerigee === perigee) {
-      return perigee.isSuperMoon ? moonCircleColor : perigee.isSuperNewMoon ? "#000" : pointColor;
-    }
-
-    return perigee.isSuperMoon ? deselectedMoonCircleColor : perigee.isSuperNewMoon ? "#000" : deselectedPointColor;
-  }
+function makeLine(xScale: D3ScaleTime, yScale: D3ScaleLinear, perigees: Perigee[]) {
+  // Given a time scaling function, constructs a 'd' attribute value (string representation of the line).
+  return line<Perigee>()
+    .x((d) => xScale(d.date))
+    .y((d) => yScale(d.distance))
+    .curve(curveNatural)(perigees);
 }
 
 function getPerigeesAndFullMoonDates(
@@ -289,3 +323,27 @@ function getClosestAngleUnixTimes(ephemeris: Ephemeris, cosTargetAngle: number, 
     return -Math.abs(cosAngle - cosTargetAngle);
   }
 }
+
+type ViewDimensions = {
+  width: number;
+  height: number;
+  marginTop: number;
+  marginRight: number;
+  marginBottom: number;
+  marginLeft: number;
+};
+
+type ViewComponents = {
+  viewDimensions: ViewDimensions;
+  svg: D3DatalessSelection<SVGSVGElement>;
+  xScale: D3ScaleTime;
+  yScale: D3ScaleLinear;
+  xAxis: D3DatalessSelection<SVGGElement>;
+  yAxis: D3DatalessSelection<SVGGElement>;
+  path: D3DatalessSelection<SVGPathElement>;
+  points: D3Selection<SVGCircleElement, Perigee, SVGGElement, undefined>;
+  fullMoonLines: D3Selection<SVGLineElement, Date, SVGGElement, undefined>;
+  zoomBehavior: ZoomBehavior<SVGSVGElement, undefined>;
+  tooltipOverlay: OverlayElement<PerigeeElems>;
+  selectedPerigee: Perigee | null;
+};

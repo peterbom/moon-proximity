@@ -14,8 +14,8 @@ export const moonlightColor: Vector3 = [0.76, 0.77, 0.8]; // #C2C5CC
 // be highlighted.
 export const highlightClosestKmCount = 10;
 
-export const displayStartDate = new Date("2025-01-01T00:00:00Z");
-export const displayEndDate = new Date("2035-01-01T00:00:00Z");
+export const dataStartDate = new Date("2000-01-01T00:00:00Z");
+export const dataEndDate = new Date("2100-01-01T00:00:00Z");
 
 // https://visibleearth.nasa.gov/images/73934/topography
 // "Data in these images were scaled 0-6400 meters"

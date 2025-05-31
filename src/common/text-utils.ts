@@ -31,11 +31,27 @@ export function replacePlaceholder(
   return text.replaceAll(re, replacement);
 }
 
-export function toFriendlyUTC(date: Date): string {
-  return (
-    date
-      .toISOString()
-      .replace("T", " ")
-      .replace(/\.\d+Z$/, "") + " UTC"
-  );
+export type FriendlyUTCOptions = {
+  showTime: boolean;
+  showUTC: boolean;
+};
+
+const defaultFriendlyUTCOptions: FriendlyUTCOptions = {
+  showTime: true,
+  showUTC: true,
+};
+
+export function toFriendlyUTC(date: Date, options: Partial<FriendlyUTCOptions> = {}): string {
+  const { showTime, showUTC } = { ...defaultFriendlyUTCOptions, ...options };
+  let text = date.toISOString();
+  if (!showTime) {
+    text = text.substring(0, text.indexOf("T"));
+  }
+
+  text = text.replace("T", " ").replace(/\.\d+Z$/, "");
+  if (showUTC) {
+    text = text + " UTC";
+  }
+
+  return text;
 }

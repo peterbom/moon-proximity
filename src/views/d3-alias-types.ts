@@ -1,6 +1,11 @@
-import type { ScaleLinear, ScaleTime, Selection } from "d3";
+import type { BaseType, ScaleLinear, ScaleTime, Selection } from "d3";
 
-export type D3DatalessSelection<TElement extends Element> = Selection<TElement, undefined, null, undefined>;
+export type D3DatalessSelection<TElement extends Element, TParentElem extends BaseType = null> = Selection<
+  TElement,
+  undefined,
+  TParentElem,
+  undefined
+>;
 
 export type D3ScaleTime = ScaleTime<number, number>;
 

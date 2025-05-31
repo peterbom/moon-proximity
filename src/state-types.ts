@@ -6,13 +6,19 @@ import { ProximityShapeData } from "./geo-shape-data";
 export type State = {
   tldrView: NotifiableProperty<boolean>;
   ephPromise: Promise<Ephemeris>;
+  timeRange: NotifiableProperty<TimeRange>;
   datePositions: DelayedProperty<DatePosition[]>;
   dateDistances: DelayedProperty<DateDistance[]>;
-  perigees: DelayedProperty<Perigee[]>;
+  perigees: NotifiableProperty<Perigee[]>;
   selectedPerigee: NotifiableProperty<Perigee | null>;
   proximityShapeData: NotifiableProperty<ProximityShapeData | null>;
   terrainLocationData: NotifiableProperty<TerrainLocationData | null>;
   savedPoints: NotifiableProperty<SavedPoint[]>;
+};
+
+export type TimeRange = {
+  startDate: Date;
+  endDate: Date;
 };
 
 export type DatePosition = {
