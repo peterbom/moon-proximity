@@ -1,5 +1,23 @@
 import { maxByProperty, seqStep } from "./iteration";
 
+export function getUnrefinedPeaks<TObj>(
+  objects: TObj[],
+  getValue: (obj: TObj) => number,
+  getQuality: (obj: TObj) => number
+): PeakObject<TObj>[] {
+  const samples: QualitySample<TObj>[] = objects.map((obj) => ({
+    obj,
+    value: getValue(obj),
+    quality: getQuality(obj),
+  }));
+  const peakRanges = getBestQualitySampleRanges(samples);
+  return peakRanges.map<PeakObject<TObj>>((range) => ({
+    peak: range.peak.obj,
+    closestSource: range.peak.obj,
+    quality: range.peak.quality,
+  }));
+}
+
 export function getPeaks<TObj>(
   objects: TObj[],
   getValue: (obj: TObj) => number,

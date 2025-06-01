@@ -6,7 +6,7 @@ import { MultiSceneDrawer } from "./webgl/multi-scene-drawer";
 import { run as runTimeRangeView } from "./views/time-range-view";
 import { run as runDistanceTimeView } from "./views/distance-time-view";
 import { run as runPerigeeTimeView } from "./views/perigee-time-view";
-import { run as runPerigeeAngleView } from "./views/perigee-angle-view";
+import { run as runSuperPerigeeView } from "./views/super-perigee-view";
 import { run as runEarthView } from "./views/earth-view";
 import { run as runProximityMapView } from "./views/proximity-map-view";
 import { run as runSummaryView } from "./views/summary-view";
@@ -42,7 +42,7 @@ document.addEventListener("DOMContentLoaded", function () {
     "time-range-view": { run: runTimeRangeView, classList: [graphicLine] },
     "distance-time-view": { run: runDistanceTimeView, classList: [graphicRect] },
     "perigee-time-view": { run: runPerigeeTimeView, classList: [graphicRect] },
-    "perigee-angle-view": { run: runPerigeeAngleView, classList: [graphicRect] },
+    "super-perigee-view": { run: runSuperPerigeeView, classList: [graphicRect] },
   };
 
   const virtualCanvasViewLookup: VirtualCanvasFunctionLookup = {
@@ -104,7 +104,7 @@ async function fetchEphemeris(): Promise<Response> {
 
 const nowDate = new Date();
 const initialStartDate = new Date(Date.UTC(nowDate.getUTCFullYear(), nowDate.getUTCMonth(), nowDate.getUTCDate()));
-const initialEndDate = new Date(Date.UTC(nowDate.getUTCFullYear() + 5, nowDate.getUTCMonth(), nowDate.getUTCDate()));
+const initialEndDate = new Date(Date.UTC(nowDate.getUTCFullYear() + 25, nowDate.getUTCMonth(), nowDate.getUTCDate()));
 
 const state: State = {
   tldrView: new NotifiableProperty<boolean>(false),

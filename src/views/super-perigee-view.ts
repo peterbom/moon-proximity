@@ -1,16 +1,7 @@
-import {
-  axisBottom,
-  axisLeft,
-  create,
-  D3ZoomEvent,
-  extent,
-  scaleLinear,
-  Selection as D3Selection,
-  zoom,
-  ZoomBehavior,
-} from "d3";
+import { axisBottom, axisLeft, create, extent, scaleLinear, scaleUtc, zoom } from "d3";
+import type { D3ZoomEvent, Selection as D3Selection, ZoomBehavior } from "d3";
 import { OverlayElement } from "../common/html-utils";
-import type { Perigee, State } from "../state-types";
+import { Perigee, State } from "../state-types";
 import {
   createPerigeeOverlay,
   handlePerigeeMouseout,
@@ -18,9 +9,10 @@ import {
   PerigeeElems,
   setPointsAppearance,
 } from "./perigee-info-overlay";
-import type { D3DatalessSelection, D3ScaleLinear } from "./d3-alias-types";
+import { D3DatalessSelection, D3ScaleLinear, D3ScaleTime } from "./d3-alias-types";
+import { getUnrefinedPeaks } from "../common/peak-detection";
 
-export function run(container: HTMLElement, state: State) {
+export async function run(container: HTMLElement, state: State) {
   const viewDimensions: ViewDimensions = {
     width: container.clientWidth,
     height: container.clientHeight,
@@ -45,27 +37,35 @@ function updateSelectedPerigee(perigee: Perigee | null, viewComponents: ViewComp
   viewComponents.points = viewComponents.points.call(setPointsAppearance, perigee);
 }
 
-function updatePerigees(state: State, viewComponents: ViewComponents, perigees: Perigee[]) {
+function updatePerigees(state: State, viewComponents: ViewComponents, allPerigees: Perigee[]) {
+  const { startDate, endDate } = state.timeRange.getValue();
+
+  const perigees =
+    allPerigees.length > 3
+      ? getUnrefinedPeaks(
+          allPerigees,
+          (p) => p.date.getTime(),
+          (p) => -p.distance
+        ).map((p) => p.peak)
+      : allPerigees;
+
   const viewDimensions = viewComponents.viewDimensions;
 
-  viewComponents.xScale = viewComponents.xScale
-    .domain(extent(perigees, (d) => d.angleFromFullMoonDegrees) as [number, number]) // cast needed: https://stackoverflow.com/a/75465468
-    .nice();
-
+  viewComponents.xScale = viewComponents.xScale.domain([startDate, endDate]).nice();
   viewComponents.yScale = viewComponents.yScale.domain(extent(perigees, (d) => d.distance) as [number, number]).nice();
 
   viewComponents.points = viewComponents.points
     .data(perigees)
     .join("circle")
     .call(setPointsAppearance, viewComponents.selectedPerigee)
-    .attr("cx", (p) => viewComponents.xScale(p.angleFromFullMoonDegrees))
+    .attr("cx", (p) => viewComponents.xScale(p.date))
     .attr("cy", (p) => viewComponents.yScale(p.distance))
     .style("cursor", "pointer")
     .on("mouseover", (_e, p) =>
       handlePerigeeMouseover(
         viewComponents.tooltipOverlay,
         p,
-        viewComponents.xScale(p.angleFromFullMoonDegrees),
+        viewComponents.xScale(p.date),
         viewComponents.yScale(p.distance)
       )
     )
@@ -75,28 +75,36 @@ function updatePerigees(state: State, viewComponents: ViewComponents, perigees: 
   rescaleXAxis(viewComponents, viewComponents.xScale, viewDimensions.width);
   viewComponents.yAxis = viewComponents.yAxis.call(axisLeft(viewComponents.yScale));
 
-  viewComponents.zoomBehavior = viewComponents.zoomBehavior.on("zoom", (event: D3ZoomEvent<SVGElement, undefined>) => {
-    const xZoomed = event.transform.rescaleX(viewComponents.xScale);
-    viewComponents.points = viewComponents.points.attr("cx", (d) => xZoomed(d.angleFromFullMoonDegrees));
-    rescaleXAxis(viewComponents, xZoomed, viewDimensions.width);
-  });
+  const intervalYears = (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 365);
+  const initialScaleFactor = Math.max(intervalYears / 16, 1);
+  const maxScaleFactor = Math.max(intervalYears * 2, 1);
+
+  viewComponents.zoomBehavior
+    .scaleExtent([1, maxScaleFactor])
+    .on("zoom", (event: D3ZoomEvent<SVGElement, undefined>) => {
+      // When zooming, redraw the area and the x axis.
+      const xZoomed = event.transform.rescaleX(viewComponents.xScale);
+      viewComponents.points = viewComponents.points.attr("cx", (d) => xZoomed(d.date));
+      rescaleXAxis(viewComponents, xZoomed, viewDimensions.width);
+    });
 
   // Initial zoom.
-  viewComponents.svg.call(viewComponents.zoomBehavior).call(viewComponents.zoomBehavior.scaleTo, 8, [0, 0]);
+  viewComponents.svg
+    .call(viewComponents.zoomBehavior)
+    .call(viewComponents.zoomBehavior.scaleTo, initialScaleFactor, [viewComponents.xScale(startDate), 0]);
 }
 
 function createViewComponents(container: HTMLElement, viewDimensions: ViewDimensions): ViewComponents {
   const { width, height, marginLeft, marginRight, marginTop, marginBottom } = viewDimensions;
 
-  // Declare the x (angle) scale.
-  const xScale = scaleLinear().range([marginLeft, width - marginRight]);
+  // Declare the x (time) scale.
+  const xScale = scaleUtc().range([marginLeft, width - marginRight]);
 
   // Declare the y (distance) scale.
   const yScale = scaleLinear().range([height - marginBottom, marginTop]);
 
   // Create the zoom behavior.
   const zoomBehavior = zoom<SVGSVGElement, undefined>()
-    .scaleExtent([1, 32])
     .extent([
       [marginLeft, marginTop],
       [width - marginRight, height - marginBottom],
@@ -149,7 +157,7 @@ function createViewComponents(container: HTMLElement, viewDimensions: ViewDimens
   };
 }
 
-function rescaleXAxis(viewComponents: ViewComponents, xScale: D3ScaleLinear, width: number) {
+function rescaleXAxis(viewComponents: ViewComponents, xScale: D3ScaleTime, width: number) {
   viewComponents.xAxis = viewComponents.xAxis.call(
     axisBottom(xScale)
       .ticks(width / 80)
@@ -169,7 +177,7 @@ type ViewDimensions = {
 type ViewComponents = {
   viewDimensions: ViewDimensions;
   svg: D3DatalessSelection<SVGSVGElement>;
-  xScale: D3ScaleLinear;
+  xScale: D3ScaleTime;
   yScale: D3ScaleLinear;
   xAxis: D3DatalessSelection<SVGGElement>;
   yAxis: D3DatalessSelection<SVGGElement>;
