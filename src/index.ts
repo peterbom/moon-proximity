@@ -13,7 +13,7 @@ import { run as runSummaryView } from "./views/summary-view";
 import { DelayedProperty, NotifiableProperty } from "./common/state-properties";
 import { graphicLine, graphicRect, graphicSquare } from "./styles/graphics.module.css";
 import { hidden } from "./styles/site.module.css";
-import { getSavedPoints, getSavedTldr, saveTldr } from "./storage";
+import { getIndexedDb, getSavedPoints, getSavedTldr, readEphemeris, saveTldr, storeEphemeris } from "./storage";
 
 document.addEventListener("DOMContentLoaded", function () {
   // Load initial data from local storage
@@ -75,13 +75,31 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 
 async function getEphemeris(): Promise<Ephemeris> {
+  const db = await getIndexedDb();
+  if (db === null) {
+    const response = await fetchEphemeris();
+    const buffer = await response.arrayBuffer();
+    return new Ephemeris(new DataView(buffer), ephemerisMetadata, ephemerisStartDate);
+  }
+
+  let ephemerisBlob = await readEphemeris(db);
+  if (ephemerisBlob === null) {
+    const response = await fetchEphemeris();
+    ephemerisBlob = await response.blob();
+    await storeEphemeris(db, ephemerisBlob);
+  }
+
+  const buffer = await ephemerisBlob.arrayBuffer();
+  return new Ephemeris(new DataView(buffer), ephemerisMetadata, ephemerisStartDate);
+}
+
+async function fetchEphemeris(): Promise<Response> {
   const response = await fetch("./resources/ephemeris.dat");
   if (!response.ok) {
     throw new Error(`Failed to fetch ephemeris data: ${response.status}`);
   }
 
-  const buffer = await response.arrayBuffer();
-  return new Ephemeris(new DataView(buffer), ephemerisMetadata, ephemerisStartDate);
+  return response;
 }
 
 const nowDate = new Date();
