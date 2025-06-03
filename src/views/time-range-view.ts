@@ -12,7 +12,7 @@ export async function run(container: HTMLElement, state: State) {
   const width = container.clientWidth;
   const height = container.clientHeight;
   const marginTop = 1;
-  const marginBottom = 20;
+  const marginBottom = 30;
   const marginLeft = 75;
   const marginRight = 75;
 
