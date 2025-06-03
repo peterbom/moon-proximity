@@ -9,6 +9,7 @@
   width: 100%;
   height: unset;
   aspect-ratio: 4/3;
+  overflow: hidden; /* Used with aspect-ratio to prevent content from expanding the container */
 }
 
 .graphicSquare {
@@ -16,6 +17,7 @@
   width: 100%;
   height: unset;
   aspect-ratio: 1/1;
+  overflow: hidden; /* Used with aspect-ratio to prevent content from expanding the container */
 }
 
 @media (max-width: 800px) {
