@@ -11,10 +11,10 @@ import { toFriendlyUTC } from "../common/text-utils";
 export async function run(container: HTMLElement, state: State) {
   const width = container.clientWidth;
   const height = container.clientHeight;
-  const marginTop = 0;
+  const marginTop = 1;
   const marginBottom = 20;
-  const marginLeft = 16;
-  const marginRight = 16;
+  const marginLeft = 75;
+  const marginRight = 75;
 
   const svg = create("svg")
     .attr("viewBox", [0, 0, width, height])
@@ -29,19 +29,17 @@ export async function run(container: HTMLElement, state: State) {
     .range([marginLeft, width - marginRight])
     .nice();
 
-  const xAxis = axisBottom(xScale)
-    .ticks(width / 80)
-    .tickSizeOuter(0);
-
   svg
     .append("g")
-    .attr("transform", `translate(0,${height - marginBottom})`)
-    .call(xAxis);
-
-  const g = svg.append("g").attr("transform", `translate(${marginLeft}, ${marginTop})`);
+    .call(
+      axisBottom(xScale)
+        .ticks(width / 80)
+        .tickSizeOuter(0)
+    )
+    .attr("transform", `translate(0,${height - marginBottom})`);
 
   const bodyStyle = window.getComputedStyle(document.body);
-  const labelStart = g
+  const labelStart = svg
     .append("text")
     .attr("x", 0)
     .attr("y", height / 2)
@@ -50,7 +48,7 @@ export async function run(container: HTMLElement, state: State) {
     .attr("dominant-baseline", "middle")
     .attr("text-anchor", "end");
 
-  const labelEnd = g
+  const labelEnd = svg
     .append("text")
     .attr("x", 0)
     .attr("y", height / 2)
@@ -61,8 +59,8 @@ export async function run(container: HTMLElement, state: State) {
 
   const brushBehavior = brushX<undefined>()
     .extent([
-      [0, 1],
-      [width - marginLeft - marginRight, height],
+      [marginLeft, marginTop],
+      [width - marginRight, height],
     ])
     .on("brush", (event: D3BrushEvent<undefined>) => {
       const [x1, x2] = event.selection as [number, number];
@@ -86,7 +84,7 @@ export async function run(container: HTMLElement, state: State) {
       }
     });
 
-  const brush = g.append("g").call(brushBehavior);
+  const brush = svg.append("g").call(brushBehavior);
 
   const brushResizePath = (handle: BrushHandle) => {
     const isRight = handle.type === "e";
