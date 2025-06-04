@@ -6,7 +6,7 @@ Line chart based on:
 
 import { axisBottom, axisLeft, create, curveNatural, extent, line, scaleLinear, scaleUtc, zoom } from "d3";
 import type { D3ZoomEvent, ZoomBehavior, ZoomTransform } from "d3";
-import { getDistance, getEarthAndMoonPositions } from "../calculations";
+import { getDistance, getEarthMoonAndSunPositions } from "../calculations";
 import { asCssColor } from "../common/html-utils";
 import { seqStep } from "../common/iteration";
 import { dataEndDate, dataStartDate, highlightColor } from "../constants";
@@ -185,7 +185,7 @@ function getDatePositionsAndDistances(ephemeris: Ephemeris): {
 } {
   const datePositions = seqStep(dataStartDate.getTime(), dataEndDate.getTime(), 1000 * 60 * 60 * 24).map((unixTime) => {
     const date = new Date(unixTime);
-    const position = getEarthAndMoonPositions(ephemeris, getAstronomicalTime(date));
+    const position = getEarthMoonAndSunPositions(ephemeris, getAstronomicalTime(date));
     return { date, position };
   });
 

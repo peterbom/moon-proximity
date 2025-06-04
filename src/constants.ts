@@ -3,6 +3,8 @@ import { Vector3 } from "./common/numeric-types";
 export const earthEquatorialRadius = 6378.137;
 export const earthPolarRadius = 6356.752314245;
 export const earthToMoonMass = 81.30056845;
+export const moonMeanRadius = 1737.4; // https://nssdc.gsfc.nasa.gov/planetary/factsheet/moonfact.html
+export const sunMeanRadius = 695700; // https://nssdc.gsfc.nasa.gov/planetary/factsheet/sunfact.html
 
 export const highlightColor: Vector3 = [0.616, 0, 1]; // #9D00FF
 export const sunlightColor: Vector3 = [0.99, 0.95, 0.78]; // #fcf2c7

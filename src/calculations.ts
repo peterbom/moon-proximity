@@ -19,6 +19,10 @@ export type EarthMoonPositions = {
   earthPosition: Vector3;
 };
 
+export type EarthMoonSunPositions = EarthMoonPositions & {
+  sunPosition: Vector3;
+};
+
 export type EarthRotation = {
   axis: Vector3;
   axialAngle: number;
@@ -42,6 +46,14 @@ export function getEarthAndMoonPositions(ephemeris: Ephemeris, time: Astronomica
   const moonPosition = ssbToMoon.positions as Vector3;
 
   return { earthPosition, moonPosition };
+}
+
+export function getEarthMoonAndSunPositions(ephemeris: Ephemeris, time: AstronomicalTime): EarthMoonSunPositions {
+  const ssbToSun = ephemeris.getSsbToSun(time.julianDays);
+  const sunPosition = ssbToSun.positions as Vector3;
+
+  const { moonPosition, earthPosition } = getEarthAndMoonPositions(ephemeris, time);
+  return { earthPosition, moonPosition, sunPosition };
 }
 
 export function getEarthRotation(time: AstronomicalTime): EarthRotation {

@@ -1,4 +1,4 @@
-import { EarthMoonPositions } from "./calculations";
+import { EarthMoonPositions, EarthMoonSunPositions } from "./calculations";
 import { DelayedProperty, NotifiableProperty } from "./common/state-properties";
 import { Ephemeris } from "./ephemeris";
 import { ProximityShapeData } from "./geo-shape-data";
@@ -23,12 +23,22 @@ export type TimeRange = {
 
 export type DatePosition = {
   date: Date;
-  position: EarthMoonPositions;
+  position: EarthMoonSunPositions;
 };
 
 export type DateDistance = {
   date: Date;
   distance: number;
+};
+
+export type NewMoon = {
+  date: Date;
+  moonDistance: number;
+  sunDistance: number;
+  positions: EarthMoonSunPositions;
+  angleBetweenMoonAndSun: number;
+  moonVisibleAngle: number;
+  sunVisibleAngle: number;
 };
 
 export type Perigee = {

@@ -5,6 +5,7 @@ import { getWebGLContext, MultiViewContext } from "./webgl/context";
 import { MultiSceneDrawer } from "./webgl/multi-scene-drawer";
 import { run as runTimeRangeView } from "./views/time-range-view";
 import { run as runDistanceTimeView } from "./views/distance-time-view";
+import { run as runNewMoonView } from "./views/new-moon-view";
 import { run as runPerigeeTimeView } from "./views/perigee-time-view";
 import { run as runSuperPerigeeView } from "./views/super-perigee-view";
 import { run as runEarthView } from "./views/earth-view";
@@ -41,6 +42,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const newElemViewLookup: ElementFunctionLookup = {
     "time-range-view": { run: runTimeRangeView, classList: [graphicLine] },
     "distance-time-view": { run: runDistanceTimeView, classList: [graphicRect] },
+    "new-moon-view": { run: runNewMoonView, classList: [graphicRect] },
     "perigee-time-view": { run: runPerigeeTimeView, classList: [graphicRect] },
     "super-perigee-view": { run: runSuperPerigeeView, classList: [graphicRect] },
   };
