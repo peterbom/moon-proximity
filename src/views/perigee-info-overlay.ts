@@ -1,4 +1,5 @@
 import { asCssColor, createTextOverlay, OverlayElement, setAbsoluteStyleRect } from "../common/html-utils";
+import { radToDeg } from "../common/math";
 import { toFriendlyUTC } from "../common/text-utils";
 import { scaleVector } from "../common/vectors";
 import { highlightColor, moonlightColor } from "../constants";
@@ -55,8 +56,8 @@ export function handlePerigeeMouseover(
     : "";
 
   overlayElement.content.date.textContent = toFriendlyUTC(perigee.date);
-  overlayElement.content.distance.textContent = perigee.distance.toFixed(2);
-  overlayElement.content.angle.textContent = perigee.angleFromFullMoonDegrees.toFixed(1);
+  overlayElement.content.distance.textContent = perigee.moonDistance.toFixed(2);
+  overlayElement.content.angle.textContent = (180 - radToDeg(perigee.angleBetweenMoonAndSun)).toFixed(1);
   overlayElement.content.angleInfo.textContent = angleExtraInfo;
 }
 

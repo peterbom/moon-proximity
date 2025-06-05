@@ -105,7 +105,7 @@ function updateViewComponents(
     .range([marginLeft, width - marginRight]);
 
   viewComponents.yScale = viewComponents.yScale
-    .domain(extent(viewData.perigees, (p) => p.distance) as [number, number])
+    .domain(extent(viewData.perigees, (p) => p.moonDistance) as [number, number])
     .range([height - marginBottom, marginTop])
     .nice();
 
@@ -152,10 +152,10 @@ function updateViewComponents(
     .join("circle")
     .call(setPointsAppearance, viewData.selectedPerigee)
     .attr("cx", (p) => xScale(p.date))
-    .attr("cy", (p) => viewComponents.yScale(p.distance))
+    .attr("cy", (p) => viewComponents.yScale(p.moonDistance))
     .style("cursor", "pointer")
     .on("mouseover", (_e, p) =>
-      handlePerigeeMouseover(viewComponents.tooltipOverlay, p, xScale(p.date), viewComponents.yScale(p.distance))
+      handlePerigeeMouseover(viewComponents.tooltipOverlay, p, xScale(p.date), viewComponents.yScale(p.moonDistance))
     )
     .on("mouseout", () => handlePerigeeMouseout(viewComponents.tooltipOverlay))
     .on("pointerdown", (_e, p) => state.selectedPerigee.setValue(p));
@@ -188,7 +188,7 @@ function updateViewData(
       ? getUnrefinedPeaks(
           allPerigees,
           (p) => p.date.getTime(),
-          (p) => -p.distance
+          (p) => -p.moonDistance
         ).map((p) => p.peak)
       : allPerigees;
 

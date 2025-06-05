@@ -6,11 +6,11 @@ Line chart based on:
 
 import { axisBottom, axisLeft, create, curveNatural, extent, line, scaleLinear, scaleUtc, zoom } from "d3";
 import type { D3ZoomEvent, ZoomBehavior, ZoomTransform } from "d3";
-import { getDistance, getEarthAndMoonPositions } from "../calculations";
+import { DatePosition, getDatePosition } from "../calculations";
 import { asCssColor } from "../common/html-utils";
 import { seqStep } from "../common/iteration";
 import { dataEndDate, dataStartDate, highlightColor } from "../constants";
-import type { DateDistance, DatePosition, State } from "../state-types";
+import type { State } from "../state-types";
 import type { D3DatalessSelection, D3ScaleLinear, D3ScaleTime } from "./d3-alias-types";
 import { Ephemeris } from "../ephemeris";
 import { getAstronomicalTime } from "../time";
@@ -25,10 +25,9 @@ const zoomExtents: ZoomExtents = {
 
 export async function run(container: HTMLElement, state: State) {
   const ephemeris = await state.ephPromise;
-  const { datePositions, dateDistances } = getDatePositionsAndDistances(ephemeris);
+  const datePositions = getDatePositions(ephemeris);
 
   state.datePositions.setValue(datePositions);
-  state.dateDistances.setValue(dateDistances);
 
   const { startDate, endDate } = state.timeRange.getValue();
 
@@ -45,7 +44,7 @@ export async function run(container: HTMLElement, state: State) {
   };
 
   const viewData: ViewData = {
-    dateDistances: dateDistances.filter((dd) => dd.date >= startDate && dd.date < endDate),
+    datePositions: datePositions.filter((dp) => dp.date >= startDate && dp.date < endDate),
     startDate,
     endDate,
   };
@@ -60,7 +59,7 @@ export async function run(container: HTMLElement, state: State) {
 
   resizeObserver.observe(container);
   state.timeRange.subscribe(({ startDate, endDate }) => {
-    viewData.dateDistances = dateDistances.filter((dd) => dd.date >= startDate && dd.date < endDate);
+    viewData.datePositions = datePositions.filter((dp) => dp.date >= startDate && dp.date < endDate);
     viewData.startDate = startDate;
     viewData.endDate = endDate;
     updateViewComponents(viewComponents, viewDimensions, viewData);
@@ -116,7 +115,7 @@ function updateViewComponents(viewComponents: ViewComponents, viewDimensions: Vi
     .range([marginLeft, width - marginRight]);
 
   viewComponents.yScale = viewComponents.yScale
-    .domain(extent(viewData.dateDistances, (d) => d.distance) as [number, number]) // cast needed: https://stackoverflow.com/a/75465468
+    .domain(extent(viewData.datePositions, (d) => d.moonDistance) as [number, number]) // cast needed: https://stackoverflow.com/a/75465468
     .range([height - marginBottom, marginTop])
     .nice();
 
@@ -160,10 +159,10 @@ function updateViewComponents(viewComponents: ViewComponents, viewDimensions: Vi
 
   viewComponents.path = viewComponents.path.attr(
     "d",
-    line<DateDistance>()
+    line<DatePosition>()
       .x((d) => xScale(d.date))
-      .y((d) => viewComponents.yScale(d.distance))
-      .curve(curveNatural)(viewData.dateDistances)
+      .y((d) => viewComponents.yScale(d.moonDistance))
+      .curve(curveNatural)(viewData.datePositions)
   );
 
   viewComponents.xAxis = viewComponents.xAxis
@@ -179,18 +178,11 @@ function updateViewComponents(viewComponents: ViewComponents, viewDimensions: Vi
     .attr("transform", `translate(${viewDimensions.marginLeft},0)`);
 }
 
-function getDatePositionsAndDistances(ephemeris: Ephemeris): {
-  datePositions: DatePosition[];
-  dateDistances: DateDistance[];
-} {
-  const datePositions = seqStep(dataStartDate.getTime(), dataEndDate.getTime(), 1000 * 60 * 60 * 24).map((unixTime) => {
+function getDatePositions(ephemeris: Ephemeris): DatePosition[] {
+  return seqStep(dataStartDate.getTime(), dataEndDate.getTime(), 1000 * 60 * 60 * 24).map<DatePosition>((unixTime) => {
     const date = new Date(unixTime);
-    const position = getEarthAndMoonPositions(ephemeris, getAstronomicalTime(date));
-    return { date, position };
+    return getDatePosition(ephemeris, getAstronomicalTime(date));
   });
-
-  const dateDistances = datePositions.map((p) => ({ date: p.date, distance: getDistance(p.position) }));
-  return { datePositions, dateDistances };
 }
 
 type ViewDimensions = {
@@ -203,7 +195,7 @@ type ViewDimensions = {
 };
 
 type ViewData = {
-  dateDistances: DateDistance[];
+  datePositions: DatePosition[];
   startDate: Date;
   endDate: Date;
 };

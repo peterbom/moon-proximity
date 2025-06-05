@@ -1,9 +1,8 @@
 import { axisBottom, axisLeft, create, curveNatural, extent, line, scaleLinear, scaleUtc, zoom } from "d3";
 import type { D3ZoomEvent, Selection as D3Selection, ZoomBehavior, ZoomTransform } from "d3";
 import { asCssColor, OverlayElement } from "../common/html-utils";
-import { radToDeg } from "../common/math";
 import { moonlightColor } from "../constants";
-import { DateDistance, DatePosition, Perigee, State } from "../state-types";
+import { Perigee, State } from "../state-types";
 import {
   createPerigeeOverlay,
   handlePerigeeMouseout,
@@ -14,14 +13,18 @@ import {
 import { D3DatalessSelection, D3ScaleLinear, D3ScaleTime } from "./d3-alias-types";
 import { Ephemeris } from "../ephemeris";
 import { getPeaks } from "../common/peak-detection";
-import { getAngleFromFullMoon, getCosAngleFromFullMoon, getDistance, getEarthAndMoonPositions } from "../calculations";
+import {
+  DatePosition,
+  DatePositionAngles,
+  getDatePosition,
+  getDatePositionAngles,
+  getLunarEclipseMaginutude,
+} from "../calculations";
 import { getAstronomicalTime } from "../time";
 import { maxByProperty } from "../common/iteration";
 import { getZoomFactors, ZoomExtents } from "./d3-helpers";
 
 const lineColor = asCssColor([...moonlightColor, 1]);
-const fullMoonCosAngle = 1;
-const newMoonCosAngle = -1;
 const zoomExtents: ZoomExtents = {
   min: 1000 * 60 * 60 * 24 * 30, // 1 month
   max: 1000 * 60 * 60 * 24 * 365 * 5, // 5 years
@@ -31,7 +34,6 @@ const zoomExtents: ZoomExtents = {
 export async function run(container: HTMLElement, state: State) {
   const ephemeris = await state.ephPromise;
   const datePositions = await state.datePositions.getValue();
-  const dateDistances = await state.dateDistances.getValue();
 
   const viewComponents = createViewComponents(container);
   container.append(viewComponents.svg.node()!);
@@ -48,15 +50,13 @@ export async function run(container: HTMLElement, state: State) {
   const viewData: ViewData = {
     startDate: new Date(),
     endDate: new Date(),
-    datePositions,
-    dateDistances,
     perigees: [],
     selectedPerigee: null,
     fullMoonDates: [],
   };
 
   const { startDate, endDate } = state.timeRange.getValue();
-  updateViewData(viewData, ephemeris, state.selectedPerigee.getValue(), startDate, endDate);
+  updateViewData(viewData, ephemeris, datePositions, state.selectedPerigee.getValue(), startDate, endDate);
   state.perigees.setValue(viewData.perigees);
 
   updateViewComponents(viewComponents, viewDimensions, viewData, state);
@@ -74,7 +74,7 @@ export async function run(container: HTMLElement, state: State) {
   });
 
   state.timeRange.subscribe(({ startDate, endDate }) => {
-    updateViewData(viewData, ephemeris, state.selectedPerigee.getValue(), startDate, endDate);
+    updateViewData(viewData, ephemeris, datePositions, state.selectedPerigee.getValue(), startDate, endDate);
     state.perigees.setValue(viewData.perigees);
     updateViewComponents(viewComponents, viewDimensions, viewData, state);
   });
@@ -149,7 +149,7 @@ function updateViewComponents(
     .range([marginLeft, width - marginRight]);
 
   viewComponents.yScale = viewComponents.yScale
-    .domain(extent(viewData.perigees, (p) => p.distance) as [number, number]) // cast needed: https://stackoverflow.com/a/75465468
+    .domain(extent(viewData.perigees, (p) => p.moonDistance) as [number, number]) // cast needed: https://stackoverflow.com/a/75465468
     .range([height - marginBottom, marginTop])
     .nice();
 
@@ -195,7 +195,7 @@ function updateViewComponents(
     "d",
     line<Perigee>()
       .x((p) => xScale(p.date))
-      .y((p) => viewComponents.yScale(p.distance))
+      .y((p) => viewComponents.yScale(p.moonDistance))
       .curve(curveNatural)(viewData.perigees)
   );
 
@@ -204,10 +204,10 @@ function updateViewComponents(
     .join("circle")
     .call(setPointsAppearance, viewData.selectedPerigee)
     .attr("cx", (p) => xScale(p.date))
-    .attr("cy", (p) => viewComponents.yScale(p.distance))
+    .attr("cy", (p) => viewComponents.yScale(p.moonDistance))
     .style("cursor", "pointer")
     .on("mouseover", (_e, p) =>
-      handlePerigeeMouseover(viewComponents.tooltipOverlay, p, xScale(p.date), viewComponents.yScale(p.distance))
+      handlePerigeeMouseover(viewComponents.tooltipOverlay, p, xScale(p.date), viewComponents.yScale(p.moonDistance))
     )
     .on("mouseout", () => handlePerigeeMouseout(viewComponents.tooltipOverlay))
     .on("pointerdown", (_e, p) => state.selectedPerigee.setValue(p));
@@ -236,105 +236,94 @@ function updateViewComponents(
     .attr("transform", `translate(${viewDimensions.marginLeft},0)`);
 }
 
+const peakRangeThresholdSeconds = 1000 * 30;
+
 function updateViewData(
   viewData: ViewData,
   ephemeris: Ephemeris,
+  allDatePositions: DatePosition[],
   selectedPerigee: Perigee | null,
   startDate: Date,
   endDate: Date
 ) {
   viewData.startDate = startDate;
   viewData.endDate = endDate;
-  const datePositions = viewData.datePositions.filter((dd) => dd.date >= startDate && dd.date < endDate);
-  const dateDistances = viewData.dateDistances.filter((dd) => dd.date >= startDate && dd.date < endDate);
 
-  const unixTimes = datePositions.map((p) => p.date.getTime());
+  const datePositionAngles = allDatePositions
+    .filter((dp) => dp.date >= startDate && dp.date < endDate)
+    .map(getDatePositionAngles);
 
-  viewData.fullMoonDates = getClosestAngleUnixTimes(ephemeris, fullMoonCosAngle, unixTimes).map(
-    (time) => new Date(time)
-  );
-  const newMoonDates = getClosestAngleUnixTimes(ephemeris, newMoonCosAngle, unixTimes).map((time) => new Date(time));
-
-  viewData.perigees = getPerigees(ephemeris, dateDistances, viewData.fullMoonDates, newMoonDates);
-  viewData.selectedPerigee =
-    selectedPerigee !== null && viewData.perigees.includes(selectedPerigee) ? selectedPerigee : null;
-}
-
-// Aim to calculate troughs within 30 seconds of the minimum distance.
-const peakRangeThresholdSeconds = 1000 * 30;
-
-function getPerigees(
-  ephemeris: Ephemeris,
-  dateDistances: DateDistance[],
-  fullMoonDates: Date[],
-  newMoonDates: Date[]
-): Perigee[] {
-  const perigeePeaks = getPeaks(
-    dateDistances,
-    (dd) => dd.date.getTime(),
-    (dd) => -dd.distance,
-    (unixTime) => {
-      const date = new Date(unixTime);
-      const positions = getEarthAndMoonPositions(ephemeris, getAstronomicalTime(date));
-      const distance = getDistance(positions);
-      return { date, distance };
-    },
+  viewData.fullMoonDates = getPeaks(
+    datePositionAngles,
+    (dpa) => dpa.date.getTime(),
+    (dpa) => dpa.angleBetweenMoonAndSun,
+    unixTimeToDatePositionAngles,
     peakRangeThresholdSeconds
-  );
+  ).map((p) => p.peak.date);
 
+  const newMoonDates = getPeaks(
+    datePositionAngles,
+    (dpa) => dpa.date.getTime(),
+    (dpa) => -dpa.angleBetweenMoonAndSun,
+    unixTimeToDatePositionAngles,
+    peakRangeThresholdSeconds
+  ).map((p) => p.peak.date);
+
+  // Get the max/min moon distance by year for supermoon calculations.
   const yearMaxMinDistance = new Map<number, { max: number; min: number }>();
-  Map.groupBy(dateDistances, (dd) => dd.date.getFullYear()).forEach((dds, year) => {
+  Map.groupBy(datePositionAngles, (dp) => dp.date.getFullYear()).forEach((dps, year) => {
     yearMaxMinDistance.set(year, {
-      max: maxByProperty(dds, (dd) => dd.distance).value,
-      min: -maxByProperty(dds, (dd) => -dd.distance).value,
+      max: maxByProperty(dps, (dd) => dd.moonDistance).value,
+      min: -maxByProperty(dps, (dd) => -dd.moonDistance).value,
     });
   });
 
-  return perigeePeaks.map<Perigee>((p) => {
-    const positions = getEarthAndMoonPositions(ephemeris, getAstronomicalTime(p.peak.date));
-    const angleFromFullMoon = getAngleFromFullMoon(positions);
+  viewData.perigees = getPeaks(
+    datePositionAngles,
+    (dpa) => dpa.date.getTime(),
+    (dpa) => -dpa.moonDistance,
+    unixTimeToPerigee,
+    peakRangeThresholdSeconds
+  ).map((p) => datePositionAnglesToPerigee(p.peak));
 
-    const maxMinDistance = yearMaxMinDistance.get(p.peak.date.getFullYear())!;
-    const superMoonThreshold = (maxMinDistance.max - maxMinDistance.min) * 0.1 + maxMinDistance.min;
+  viewData.selectedPerigee =
+    selectedPerigee !== null && viewData.perigees.includes(selectedPerigee) ? selectedPerigee : null;
 
-    const date = p.peak.date;
-    const unixTime = date.getTime();
+  function unixTimeToPerigee(unixTime: number): Perigee {
+    const datePositionAngles = unixTimeToDatePositionAngles(unixTime);
+    return datePositionAnglesToPerigee(datePositionAngles);
+  }
+
+  function unixTimeToDatePositionAngles(unixTime: number): DatePositionAngles {
+    const date = new Date(unixTime);
+    const datePosition = getDatePosition(ephemeris, getAstronomicalTime(date));
+    return getDatePositionAngles(datePosition);
+  }
+
+  function datePositionAnglesToPerigee(datePositionAngles: DatePositionAngles): Perigee {
+    const unixTime = datePositionAngles.date.getTime();
     const hoursFromFullMoon =
-      -maxByProperty(fullMoonDates, (fullMoonDate) => -Math.abs(fullMoonDate.getTime() - unixTime)).value /
+      -maxByProperty(viewData.fullMoonDates, (fullMoonDate) => -Math.abs(fullMoonDate.getTime() - unixTime)).value /
       (1000 * 60 * 60);
     const hoursFromNewMoon =
       -maxByProperty(newMoonDates, (newMoonDate) => -Math.abs(newMoonDate.getTime() - unixTime)).value /
       (1000 * 60 * 60);
 
-    const isSuperMoon = hoursFromFullMoon < 24 && p.peak.distance < superMoonThreshold;
-    const isSuperNewMoon = hoursFromNewMoon < 24 && p.peak.distance < superMoonThreshold;
+    const maxMinDistance = yearMaxMinDistance.get(datePositionAngles.date.getFullYear())!;
+    const superMoonThreshold = (maxMinDistance.max - maxMinDistance.min) * 0.1 + maxMinDistance.min;
+    const isSuperMoon = hoursFromFullMoon < 24 && datePositionAngles.moonDistance < superMoonThreshold;
+    const isSuperNewMoon = hoursFromNewMoon < 24 && datePositionAngles.moonDistance < superMoonThreshold;
+
+    const lunarEclipseMagnitude = getLunarEclipseMaginutude(datePositionAngles);
 
     return {
-      date,
-      distance: p.peak.distance,
-      angleFromFullMoon,
-      angleFromFullMoonDegrees: radToDeg(angleFromFullMoon),
+      ...datePositionAngles,
       hoursFromFullMoon,
       hoursFromNewMoon,
       isSuperMoon,
       isSuperNewMoon,
+      lunarEclipseMagnitude,
     };
-  });
-}
-
-function getClosestAngleUnixTimes(ephemeris: Ephemeris, cosTargetAngle: number, unixTimes: number[]): number[] {
-  return getPeaks(
-    unixTimes,
-    (t) => t,
-    (t) => getProximityToAngle(t),
-    (t) => t,
-    peakRangeThresholdSeconds
-  ).map((p) => p.peak);
-
-  function getProximityToAngle(unixTime: number): number {
-    const positions = getEarthAndMoonPositions(ephemeris, getAstronomicalTime(new Date(unixTime)));
-    const cosAngle = getCosAngleFromFullMoon(positions);
-    return -Math.abs(cosAngle - cosTargetAngle);
   }
 }
 
@@ -348,8 +337,6 @@ type ViewDimensions = {
 };
 
 type ViewData = {
-  datePositions: DatePosition[];
-  dateDistances: DateDistance[];
   perigees: Perigee[];
   selectedPerigee: Perigee | null;
   fullMoonDates: Date[];

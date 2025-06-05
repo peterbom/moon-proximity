@@ -1,6 +1,6 @@
 import { createCombinedCanvas, createDivInRelativeContainer, getElementByIdOrError } from "./common/html-utils";
 import { Ephemeris, SeriesMetadata, SeriesType } from "./ephemeris";
-import type { DateDistance, DatePosition, State } from "./state-types";
+import type { State } from "./state-types";
 import { getWebGLContext, MultiViewContext } from "./webgl/context";
 import { MultiSceneDrawer } from "./webgl/multi-scene-drawer";
 import { run as runTimeRangeView } from "./views/time-range-view";
@@ -14,6 +14,7 @@ import { DelayedProperty, NotifiableProperty } from "./common/state-properties";
 import { graphicLine, graphicRect, graphicSquare } from "./styles/graphics.module.css";
 import { hidden } from "./styles/site.module.css";
 import { getIndexedDb, getSavedPoints, getSavedTldr, readEphemeris, saveTldr, storeEphemeris } from "./storage";
+import { DatePosition } from "./calculations";
 
 document.addEventListener("DOMContentLoaded", function () {
   // Load initial data from local storage
@@ -114,7 +115,6 @@ const state: State = {
     endDate: initialEndDate,
   }),
   datePositions: new DelayedProperty<DatePosition[]>(),
-  dateDistances: new DelayedProperty<DateDistance[]>(),
   perigees: new NotifiableProperty([]),
   selectedPerigee: new NotifiableProperty(null),
   proximityShapeData: new NotifiableProperty(null),

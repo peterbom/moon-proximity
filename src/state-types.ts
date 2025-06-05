@@ -1,4 +1,4 @@
-import { EarthMoonPositions } from "./calculations";
+import { DatePosition, EclipseMagnitude } from "./calculations";
 import { DelayedProperty, NotifiableProperty } from "./common/state-properties";
 import { Ephemeris } from "./ephemeris";
 import { ProximityShapeData } from "./geo-shape-data";
@@ -8,7 +8,6 @@ export type State = {
   ephPromise: Promise<Ephemeris>;
   timeRange: NotifiableProperty<TimeRange>;
   datePositions: DelayedProperty<DatePosition[]>;
-  dateDistances: DelayedProperty<DateDistance[]>;
   perigees: NotifiableProperty<Perigee[]>;
   selectedPerigee: NotifiableProperty<Perigee | null>;
   proximityShapeData: NotifiableProperty<ProximityShapeData | null>;
@@ -21,25 +20,15 @@ export type TimeRange = {
   endDate: Date;
 };
 
-export type DatePosition = {
-  date: Date;
-  position: EarthMoonPositions;
-};
-
-export type DateDistance = {
-  date: Date;
-  distance: number;
-};
-
-export type Perigee = {
-  date: Date;
-  distance: number;
+export type Perigee = DatePosition & {
   hoursFromFullMoon: number;
   hoursFromNewMoon: number;
-  angleFromFullMoon: number;
-  angleFromFullMoonDegrees: number;
+  angleBetweenMoonAndSun: number;
+  moonVisibleAngle: number;
+  sunVisibleAngle: number;
   isSuperMoon: boolean;
   isSuperNewMoon: boolean;
+  lunarEclipseMagnitude: EclipseMagnitude;
 };
 
 export type TerrainLocationData = {

@@ -9,14 +9,36 @@ import {
   TransformSeries,
   TransformType,
 } from "./common/xform";
-import { earthEquatorialRadius, earthPolarRadius } from "./constants";
+import { earthEquatorialRadius, earthMeanRadius, earthPolarRadius, moonMeanRadius, sunMeanRadius } from "./constants";
 import { Ephemeris } from "./ephemeris";
 import { LatLongPosition } from "./geo-types";
-import { AstronomicalTime, getAstronomicalTime } from "./time";
+import { AstronomicalTime } from "./time";
 
 export type EarthMoonPositions = {
   moonPosition: Vector3;
   earthPosition: Vector3;
+};
+
+export type EarthMoonSunPositions = EarthMoonPositions & {
+  sunPosition: Vector3;
+};
+
+export type DatePosition = {
+  date: Date;
+  positions: EarthMoonSunPositions;
+  moonDistance: number;
+  sunDistance: number;
+};
+
+export type DatePositionAngles = DatePosition & {
+  angleBetweenMoonAndSun: number;
+  moonVisibleAngle: number;
+  sunVisibleAngle: number;
+};
+
+export type EclipseMagnitude = {
+  umbral: number;
+  penumbral: number;
 };
 
 export type EarthRotation = {
@@ -42,6 +64,55 @@ export function getEarthAndMoonPositions(ephemeris: Ephemeris, time: Astronomica
   const moonPosition = ssbToMoon.positions as Vector3;
 
   return { earthPosition, moonPosition };
+}
+
+export function getEarthMoonAndSunPositions(ephemeris: Ephemeris, time: AstronomicalTime): EarthMoonSunPositions {
+  const ssbToSun = ephemeris.getSsbToSun(time.julianDays);
+  const sunPosition = ssbToSun.positions as Vector3;
+
+  const { moonPosition, earthPosition } = getEarthAndMoonPositions(ephemeris, time);
+  return { earthPosition, moonPosition, sunPosition };
+}
+
+export function getDatePosition(ephemeris: Ephemeris, time: AstronomicalTime): DatePosition {
+  const positions = getEarthMoonAndSunPositions(ephemeris, time);
+  const earthToMoon = subtractVectors(positions.moonPosition, positions.earthPosition);
+  const earthToSun = subtractVectors(positions.sunPosition, positions.earthPosition);
+  const moonDistance = getMagnitude(earthToMoon);
+  const sunDistance = getMagnitude(earthToSun);
+  return { date: time.date, positions, moonDistance, sunDistance };
+}
+
+export function getDatePositionAngles(datePosition: DatePosition): DatePositionAngles {
+  const earthToMoon = subtractVectors(datePosition.positions.moonPosition, datePosition.positions.earthPosition);
+  const earthToSun = subtractVectors(datePosition.positions.sunPosition, datePosition.positions.earthPosition);
+  const angleBetweenMoonAndSun = Math.acos(dotProduct3(normalize(earthToMoon), normalize(earthToSun)));
+  const moonVisibleAngle = Math.atan(moonMeanRadius / datePosition.moonDistance) * 2;
+  const sunVisibleAngle = Math.atan(sunMeanRadius / datePosition.sunDistance) * 2;
+  return {
+    ...datePosition,
+    angleBetweenMoonAndSun,
+    moonVisibleAngle,
+    sunVisibleAngle,
+  };
+}
+
+export function getLunarEclipseMaginutude(datePositionAngles: DatePositionAngles): EclipseMagnitude {
+  const moonAngleFromUmbralConeCenter = Math.PI - datePositionAngles.angleBetweenMoonAndSun;
+  const moonDistanceInConeDirection = datePositionAngles.moonDistance * Math.cos(moonAngleFromUmbralConeCenter);
+  const tanPenumbralConeAngle = (sunMeanRadius + earthMeanRadius) / datePositionAngles.sunDistance;
+  const penumbralRadius = earthMeanRadius + moonDistanceInConeDirection * tanPenumbralConeAngle;
+
+  const tanUmbralConeAngle = (sunMeanRadius - earthMeanRadius) / datePositionAngles.sunDistance;
+  const umbralRadius = earthMeanRadius - moonDistanceInConeDirection * tanUmbralConeAngle;
+
+  const moonCenterUmbralDistance = datePositionAngles.moonDistance * Math.sin(moonAngleFromUmbralConeCenter);
+  const moonInnermostDistance = moonCenterUmbralDistance - moonMeanRadius;
+
+  return {
+    penumbral: (penumbralRadius - moonInnermostDistance) / moonMeanRadius,
+    umbral: (umbralRadius - moonInnermostDistance) / moonMeanRadius,
+  };
 }
 
 export function getEarthRotation(time: AstronomicalTime): EarthRotation {
