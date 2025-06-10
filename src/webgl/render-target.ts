@@ -36,6 +36,8 @@ type ColorTextureInfos<TTextures extends ProgramOutputTextureInfos> = {
   [name in TextureName<TTextures>]: TextureInfo;
 };
 
+const defaultClearColor: Vector4 = [0, 0, 0, 0];
+
 export interface RenderTarget {
   get framebuffer(): WebGLFramebuffer | null;
 
@@ -45,7 +47,14 @@ export interface RenderTarget {
 }
 
 export class ScreenRenderTarget implements RenderTarget {
+  private clearColor: Vector4 = defaultClearColor;
+
   constructor(private readonly gl: WebGL2RenderingContext) {}
+
+  public withClearColor(clearColor: Vector4): ScreenRenderTarget {
+    this.clearColor = clearColor;
+    return this;
+  }
 
   public get framebuffer(): WebGLFramebuffer | null {
     return null;
@@ -56,6 +65,7 @@ export class ScreenRenderTarget implements RenderTarget {
   }
 
   public clear() {
+    this.gl.clearColor(...this.clearColor);
     this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
     this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
   }
@@ -65,6 +75,11 @@ export enum DrawingRectBehavior {
   UseSuppliedViewport,
   UseTextureDimensions,
 }
+
+export const FitToViewportInitialSize: RenderDimensions = {
+  width: 1,
+  height: 1,
+};
 
 export class FramebufferRenderTarget<TTextures extends ProgramOutputTextureInfos> implements RenderTarget {
   private depthTextureInfo: TextureInfo | null = null;
@@ -94,7 +109,7 @@ export class FramebufferRenderTarget<TTextures extends ProgramOutputTextureInfos
     gl: WebGL2RenderingContext,
     programOutputs: ProgramOutputTextureDefinitions<TColorTextures>
   ): FramebufferRenderTarget<TColorTextures> {
-    return FramebufferRenderTarget.create(gl, SizeType.FitToViewport, { width: 1, height: 1 }, programOutputs);
+    return FramebufferRenderTarget.create(gl, SizeType.FitToViewport, FitToViewportInitialSize, programOutputs);
   }
 
   private static create<TColorTextures extends ProgramOutputTextureInfos>(
@@ -111,7 +126,7 @@ export class FramebufferRenderTarget<TTextures extends ProgramOutputTextureInfos
         output.attachmentIndex,
         output.definition,
         dimensions,
-        output.clearColor
+        output.clearColor || defaultClearColor
       );
       return [name, textureInfo];
     });
@@ -124,7 +139,14 @@ export class FramebufferRenderTarget<TTextures extends ProgramOutputTextureInfos
   public withDepthTexture(
     format: Extract<InternalFormat, "DEPTH_COMPONENT16" | "DEPTH_COMPONENT24">
   ): FramebufferRenderTarget<TTextures> {
-    this.depthTextureInfo = createDepthTexture(this.gl, this.framebuffer, format, this.dimensions);
+    this.depthTextureInfo = createDepthTexture(this.gl, format, this.dimensions);
+    attachDepthTexture(this.gl, this.framebuffer, this.depthTextureInfo.texture);
+    return this;
+  }
+
+  public withExistingDepthTexture(depthTextureInfo: TextureInfo): FramebufferRenderTarget<TTextures> {
+    this.depthTextureInfo = depthTextureInfo;
+    attachDepthTexture(this.gl, this.framebuffer, this.depthTextureInfo.texture);
     return this;
   }
 
@@ -179,7 +201,8 @@ export class FramebufferRenderTarget<TTextures extends ProgramOutputTextureInfos
           this.framebuffer,
           oldTextureInfo.attachmentIndex,
           oldTextureInfo.definition,
-          dimensions
+          dimensions,
+          oldTextureInfo.clearColor || defaultClearColor
         );
 
         return [name, newTextureInfo];
@@ -289,9 +312,8 @@ export type TextureInfo = {
   clearColor?: Vector4;
 };
 
-function createDepthTexture(
+export function createDepthTexture(
   gl: WebGL2RenderingContext,
-  framebuffer: WebGLFramebuffer,
   format: Extract<InternalFormat, "DEPTH_COMPONENT16" | "DEPTH_COMPONENT24">,
   dimensions: RenderDimensions
 ): TextureInfo {
@@ -304,11 +326,13 @@ function createDepthTexture(
     renderProperties: definition.getRenderProperties(),
   };
 
+  return textureInfo;
+}
+
+function attachDepthTexture(gl: WebGL2RenderingContext, framebuffer: WebGLFramebuffer, texture: WebGLTexture) {
   gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
   gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, texture, 0);
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-
-  return textureInfo;
 }
 
 function createColorTexture(
@@ -317,7 +341,7 @@ function createColorTexture(
   attachmentIndex: number,
   definition: TextureDefinition,
   dimensions: RenderDimensions,
-  clearColor?: Vector4
+  clearColor: Vector4
 ): TextureInfo {
   const textureInfo: TextureInfo = {
     definition,

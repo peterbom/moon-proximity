@@ -34,16 +34,27 @@ export type CallbackHistoryItem = {
   movementEnded: boolean;
 };
 
+export type AddDragHandlersOptions = {
+  rotationMatrix: number[];
+};
+
+const defaultAddDragHandlersOptions: AddDragHandlersOptions = {
+  rotationMatrix: makeIdentity4(),
+};
+
 export function addDragHandlers(
   combinedCanvas: HTMLCanvasElement,
   virtualCanvas: HTMLElement,
-  callback: DragCallback
+  callback: DragCallback,
+  options: Partial<AddDragHandlersOptions> = {}
 ): Cleaner {
+  const { rotationMatrix } = { ...defaultAddDragHandlersOptions, ...options };
+
   const tracking: DragTracking = {
     callback,
     spinRequestHandle: 0,
     axis: [0, 0, 1],
-    matrix: makeIdentity4(),
+    matrix: rotationMatrix,
     position: [0, 0, 0],
     delta: [0, 0, 0],
     speed: 0,

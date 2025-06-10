@@ -74,7 +74,7 @@ function createTypedArray<T extends AttribValues, P extends AttribName<T>>(
   gl: WebGL2RenderingContext,
   type: GLenum,
   data: T[P]
-): ArrayBuffer {
+): Float32Array | Uint8Array {
   switch (type) {
     case gl.FLOAT:
       return new Float32Array(data.flat());
